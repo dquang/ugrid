@@ -1,0 +1,65 @@
+meta:
+  name: brand.yml
+  links:
+    home: https://www.bafg.de
+    github: https://github.com/bafg-bund
+
+logo:
+  images:
+    icon-color: img/bfg-logo.png
+    wide-color: img/bfg-logo.png
+    tall-color: img/bfg-logo.png
+  small: icon-color
+  medium: wide-color
+  large: tall-color
+
+color:
+
+  palette:
+    Hellgrau: "#EDEBE7"
+    Dunkelblau: "#002B54"
+    Blau: "#308CCC"
+    Hellblau: "#BCD9F3"
+    Gruen: "#7BBA40"
+    Hellgruen: "#C1DEBA"
+    Rot_Braun: "#8E4454"
+    Lachs: "#F0CCC4"
+    Schwarz: "#000000"
+
+  primary: Dunkelblau
+  success: Gruen
+  warning: Lachs
+  danger: Rot_Braun
+
+typography:
+
+  fonts:
+    - family: Inter
+      source: google
+    - family: IBM Plex Mono
+      source: google
+    - family: Rubik
+      source: google
+
+  base:
+    family: Inter
+    line-height: 1.6
+  headings:
+    family: Rubik
+    weight: normal
+  link:
+    color: purple
+  monospace:
+    family: IBM Plex Mono
+    size: 1em
+
+defaults:
+  bootstrap:
+    version: 5
+  quarto:
+    format:
+      # basic format-specific settings
+      html:
+      revealjs:
+  shiny:
+    # shiny specific settings

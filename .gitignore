@@ -1,0 +1,10 @@
+.Rproj.user
+dev
+docs
+man
+*Rproj
+.Rhistory
+.Rbuildignore
+NAMESPACE
+**/img
+

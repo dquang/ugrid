@@ -1,0 +1,46 @@
+Package: ugrid
+Title: Postprocessing for NetCDF-Data in UGRID-Format
+Version: 0.1.1
+Authors@R: 
+    person("Quang", "Duong", , "duong@bafg.de", role = c("aut", "cre"))
+Description: An R package for post-processing model outputs stored in NetCDF files following the UGRID convention.
+    While it is primarily designed to handle results from Delft3D-FM, it can be used with any UGRID-compliant NetCDF dataset.
+    The data are encapsulated in an R6 object, where the 2D mesh is represented as a polygon layer,
+    enabling seamless integration with additional post-processing functions included in the package.
+    For users who prefer a graphical interface, the package also provides a Shiny application
+    that brings together the most important functionalities.
+    This allows convenient data exploration and processing without requiring prior knowledge of R programming.
+    Processed data can also be directly downloaded from within the app.
+License: GPL (>= 3)
+Depends:
+    R (>= 4.1.0)
+Encoding: UTF-8
+LazyData: true
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.3
+Suggests: 
+    geometa,
+    httr
+Imports: 
+    akima,
+    bslib,
+    classInt,
+    cols4all,
+    data.table,
+    DBI,
+    digest,
+    ggplot2,
+    mapgl,
+    matrixStats,
+    plotly,
+    promises,
+    rlang,
+    RNetCDF,
+    RSQLite,
+    sf,
+    sfheaders,
+    shiny,
+    shinyjs,
+    shinyWidgets,
+    stringi,
+    terra
