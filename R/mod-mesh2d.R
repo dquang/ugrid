@@ -11,6 +11,8 @@ map2dUi <- function(id) {
                 open=c("Data source"), multiple=FALSE,
                 bslib::accordion_panel(
                     title="Data source", icon=shiny::icon("folder-open"),
+                    shiny::sliderInput(ns("lyr"), "Select a layer", min=1L, max=10L,
+                                       value=1L, step=1L, pre="Layer "),
                     shiny::p("To update the values for variables and time step, please select a case below."),
                     shiny::selectInput(ns("ncVar1"), "Select variable", choices=""),
                     shiny::selectizeInput(ns("tsIdx1"), "Select time step", choices=""),
@@ -91,7 +93,9 @@ map2dUi <- function(id) {
             shinycssloaders::withSpinner(
                 image="img/working.gif",
                 mapgl::maplibreOutput(ns("map2d"), height="550px"))
-            # bslib::input_task_button(ns("getFeat"), "Get drawn features")
+            # shiny::sliderInput(
+            #     inputId=ns("aniTsIdx"), "Animate through all time steps", min=1, max=100, value=1, step=1,
+            #     animate=shiny::animationOptions(interval = 500, playButton = "Play", pauseButton = "Pause"))
             ),
         bslib::card(
             height="75vh", full_screen=TRUE, id=ns("map2d-cmp-card"),
@@ -105,6 +109,10 @@ map2dUi <- function(id) {
             shinycssloaders::withSpinner(
                 image="img/working.gif",
                 mapgl::maplibreOutput(ns("map2dVector"), height="550px")
+            ),
+            shiny::sliderInput(
+                ns("tsIdxVector"), label="Time step for vector map", min=1, max=100, value=1, step=1,
+                animate=shiny::animationOptions(interval=2000, playButton="Play", pauseButton="Pause")
             )
         )
 
@@ -113,9 +121,15 @@ map2dUi <- function(id) {
 
 map2dServer <- function(id, cman) {
     shiny::moduleServer(id=id, function(input, output, session) {
+        shinyjs::hide(id="lyr")
         shinyjs::hide(id="dlMap")
         shinyjs::hide(id="map2d-cmp-card")
         shinyjs::hide(id="map2d-card")
+        map2d <- shiny::reactiveVal()
+        map2dCmp <- shiny::reactiveVal()
+        map2dVec <- shiny::reactiveVal()
+        gpkgFile <- shiny::reactiveVal()
+
         observeEvent(input$findDomains, {
             progress <- shiny::Progress$new()
             on.exit(progress$close())
@@ -181,6 +195,10 @@ map2dServer <- function(id, cman) {
             } else {
                 fRings <- data.table::rbindlist(ringLst, ignore.attr = TRUE) |> sf::st_as_sf()
                 fRings <- merge(fRings, tbl[, c("caseName", "path")], by="path")
+                if (!inherits(feats, "sf")) {
+                    shiny::showNotification("Check input!")
+                    return(NULL)
+                }
                 pols <- feats[grepl("POLYGON", feats$ftype, fixed=TRUE), ]
                 polsOverlap <- sf::st_overlaps(pols, fRings)
                 pRet <- list()
@@ -206,80 +224,114 @@ map2dServer <- function(id, cman) {
             }
 
         })
-        map2d <- shiny::reactiveVal()
-        map2dCmp <- shiny::reactiveVal()
-        map2dVec <- shiny::reactiveVal()
-        gpkgFile <- shiny::reactiveVal()
 
-        shiny::observe({
-            palTbl <- getC4aTable(
-                type="cat", n=input$nClass + 1,
+        palTbl <- shiny::reactive({
+            getC4aTable(
+                type=c("cat", "seq"), n=input$nClass + 1,
                 filters=input$colFilters, series=input$colSeries
             )
+        })
+        shiny::observeEvent(palTbl(), {
             updateColorPaletteInput(
                 inputId="colPal", reverse=input$colReverse, continuous=input$continuous,
-                palTbl=palTbl)
+                selected=input$colPal, palTbl=palTbl())
+        })
+        vecData <- shiny::reactiveVal()
+        shiny::observeEvent(input$genMapVector, {
+            progress <- shiny::Progress$new()
+            progress$set(0.1, message="Generating vector layer for all time steps. It will take a while!")
+            chk <- any(sapply(input$ncNames1, chkChr))
+            if (!chk) {
+                shiny::showNotification("Please select one or some domains.")
+                return(NULL)
+            }
+            selectedMeshes <- lapply(cman$tbl[hash %in% input$ncNames1, path], addUgrid, cman=cman)
+            # TODO: separate vector layers for each domains so that they can be reused.
+            ret <- genVector4All(selectedMeshes)
+            vecData(ret)
+            # display the vector map of the selected time step
+            tsId <- as.integer(input$tsIdx1)
+            lgT <- paste0("Velocity at: ", selectedMeshes[[1]]$ts[tsId])
+            if (inherits(ret[[tsId]], "sf")) {
+                map1 <- mapgl::maplibre(bounds=ret[[tsId]]) |>
+                    mapgl::add_line_layer(source=ret[[tsId]], id=session$ns("map2d-vector"),
+                                          line_color="black", line_width=0.3) |>
+                    mapgl::add_scale_control()|>
+                    mapgl::add_geocoder_control(provider="osm") |>
+                    mapgl::add_navigation_control(show_zoom=FALSE)
+                map2dVec(map1)
+            } else {
+                shiny::showNotification("Velocity map is not available for the selected time step!")
+            }
+            progress$set(value=0.9, message="Done. Please use the time step slider to explore the velocity map.")
+            shinyjs::show(id="map2d-vector-card")
+            shinyjs::hide(id="map2d-cmp-card")
+            shinyjs::hide(id="map2d-card")
+            progress$close()
+
         })
 
-        vecData <- shiny::reactive({
-            selectedMeshes <- lapply(cman$tbl[hash %in% input$ncNames1, path], addUgrid, cman=cman)
-            ret <- NULL
-            if (length(selectedMeshes) > 0) {
-                lyrLst <- lapply(selectedMeshes, genVectorLayer, tsIdx=input$tsIdx1)
-                for (i in seq_along(lyrLst)) {
-                    if (i == 1)
-                        ret <- lyrLst[[i]]
-                    else if (i > 1)
-                        ret <- rbind(ret, lyrLst[[i]])
-                }
-                if (!is(ret, "sf"))
-                    return(NULL)
-                if (is.na(sf::st_crs(selectedMeshes[[1]]$crs))) {
-                    shiny::showNotification("No CRS assigned! All the geometry is squashed to WGS84!")
-                    ret <- squash2Bbox(ret)
-                }
+        mapData1 <- shiny::reactive({
+            agg1 <- input$agg1
+            tsIdx1 <- ifelse(input$agg1 == "none", input$tsIdx1, -1L)
+            ncNames1 <- input$ncNames1[nchar(input$ncNames1) > 0]
+            ncVar1 <- input$ncVar1
+            lyr <- input$lyr
+            if (length(ncNames1) < 1)
+                return(NULL)
+            selectedMeshes <- lapply(cman$tbl[hash %in% ncNames1, path], addUgrid, cman=cman)
+            if (length(selectedMeshes) < 1)
+                return(NULL)
+            meshLst <- getMapData(mesh=selectedMeshes, variable=ncVar1, lyr=lyr, tsIdx=tsIdx1, agg=agg1)
+            polLst <- list()
+            for (i in seq_along(meshLst)) {
+                polLst[[i]] <- meshLst[[i]]$ret
+                meshLst[[i]]$ret <- NULL
+                thisHash <- cman$tbl[path == meshLst[[i]]$path, hash]
+                cman$ugrids[[thisHash]] <- meshLst[[i]]
+            }
+            ret <- data.table::rbindlist(polLst) |> sf::st_as_sf()
+            if (is(ret, "sf")) {
+                browser()
+                res <- sf::st_area(ret[sample.int(nrow(ret), 1), ]) |> sqrt() |> pretty()
+                shiny::updateTextInput(inputId="resolution",
+                                       label=paste0("Raster resolution (suggest: ", res[1], ")"))
             }
             return(ret)
         })
+
         mapData2 <- shiny::reactive({
             ncNames2 <- input$ncNames2[nchar(input$ncNames2) > 0]
             if (length(ncNames2) < 1)
                 ncNames2 <- input$ncNames1
+            lyr <- input$lyr
             selectedMeshes <- lapply(cman$tbl[hash %in% ncNames2, path], addUgrid, cman=cman)
-            ret <- NULL
-            if (length(selectedMeshes) > 0) {
-                tsIdx2 <- ifelse(input$agg2 == "none", input$tsIdx2, NA_integer_)
-                ret <- getMapData(mesh=selectedMeshes, variable=input$ncVar2,
-                                  tsIdx=tsIdx2, agg=input$agg2)
-            }
-            return(ret)
-        })
-        mapData <- shiny::reactive({
-            ncNames1 <- input$ncNames1[nchar(input$ncNames1) > 0]
-            if (length(ncNames1) < 1)
+            if (length(selectedMeshes) < 1)
                 return(NULL)
-            selectedMeshes <- lapply(cman$tbl[hash %in% input$ncNames1, path], addUgrid, cman=cman)
-            ret <- NULL
-            if (length(selectedMeshes) > 0) {
-                tsIdx1 <- ifelse(input$agg1 == "none", input$tsIdx1, -1L)
-                ret <- getMapData(mesh=selectedMeshes, variable=input$ncVar1, tsIdx=tsIdx1, agg=input$agg1)
-                if (is(ret, "sf")) {
-                    res <- sf::st_area(ret[sample.int(nrow(ret), 1), ]) |> sqrt() |> pretty()
-                    shiny::updateTextInput(inputId="resolution",
-                                           label=paste0("Raster resolution (suggest: ", res[1], ")"))
-                }
+            agg2 <- input$agg2
+            tsIdx2 <- ifelse(agg2 == "none", input$tsIdx2, -1L)
+            ncVar2 <- input$ncVar2
+            meshLst <- getMapData(mesh=selectedMeshes, variable=ncVar2, lyr=lyr, tsIdx=tsIdx2, agg=agg2)
+            polLst <- list()
+            for (i in seq_along(meshLst)) {
+                polLst[[i]] <- meshLst[[i]]$ret
+                meshLst[[i]]$ret <- NULL
+                thisHash <- cman$tbl[path == meshLst[[i]]$path, hash]
+                cman$ugrids[[thisHash]] <- meshLst[[i]]
             }
+            ret <- data.table::rbindlist(polLst) |> sf::st_as_sf()
             return(ret)
         })
-        isolines <- shiny::reactive({
+
+        isolines1 <- shiny::reactive({
             ncNames1 <- input$ncNames1[nchar(input$ncNames1) > 0]
             if (length(ncNames1) < 1)
                 return(NULL)
             selectedMeshes <- lapply(cman$tbl[hash %in% ncNames1, path], addUgrid, cman=cman)
             if (!isTRUE(input$isoline) | is.na(selectedMeshes[[1]]$crs)) {
                 return(NULL)
-            } else if (inherits(mapData(), "sf")) {
-                mdta <- isolate(mapData())
+            } else if (inherits(mapData1(), "sf")) {
+                mdta <- isolate(mapData1())
                 if (input$ncVar1 == "sea_surface_height" & input$dryAsNa)
                     mdta[[input$ncVar1]][mdta[[input$ncVar1]] < 1e-9] <- NaN
                 stdRes <- dist(sf::st_coordinates(mdta[1, ]))[1] |> pretty()
@@ -300,6 +352,7 @@ map2dServer <- function(id, cman) {
                 return(dta)
             }
         })
+
         isolines2 <- shiny::reactive({
 
             ncNames2 <- input$ncNames2[nchar(input$ncNames2) > 0]
@@ -333,12 +386,14 @@ map2dServer <- function(id, cman) {
                 return(dta)
             }
         })
+
         shiny::observeEvent(input$genMap, {
 
             progress <- shiny::Progress$new()
             on.exit(progress$close())
             progress$set(value=0.3, message="Reading data from NetCDF...")
-            mdta1 <- mapData()
+            mdta1 <- mapData1()
+            lyr <- input$lyr
             progress$set(value=0.6, message="Generating Map...")
             chkDta <- inherits(mdta1, "sf")
             if (!chkDta) {
@@ -347,7 +402,7 @@ map2dServer <- function(id, cman) {
                 aM <- cman$ugrids[[input$ncNames1[1]]]
                 ncVar1 <- aM$getVarName(input$ncVar1)
                 varAtt <- aM$atts[varName == ncVar1]
-                ts1 <- paste0("At: ", cman$ugrids[[1]]$ts[as.integer(input$tsIdx)])
+                ts1 <- paste0("At: ", aM$ts[as.integer(input$tsIdx1)])
                 lgT1 <- sprintf("%s (%s) [%s]",
                                 varAtt[grepl("long_name", name), val],
                                 ifelse(input$agg1 == "none", ts1, input$agg1),
@@ -358,7 +413,7 @@ map2dServer <- function(id, cman) {
                                colPal=input$colPal, continuous=input$continuous, reverse=input$colReverse, rsf=rsf)
                 if (input$isoline)
                     progress$set(value=0.7, message="Generating isolines....")
-                iline <- isolines()
+                iline <- isolines1()
                 if (inherits(iline, "sf")) {
                     if (is.na(sf::st_crs(iline)))
                         iline <- squash2Bbox(iline, , rsf=rsf)
@@ -391,16 +446,17 @@ map2dServer <- function(id, cman) {
                 progress$set(value=0.9, message="Done. Loading map....")
             }
         })
+
         shiny::observeEvent(input$genCmpMap, {
 
             progress <- shiny::Progress$new()
             on.exit(progress$close())
             progress$set(value=0.3, message="Reading data from NetCDF...")
-            mdta1 <- mapData()
+            mdta1 <- mapData1()
             mdta2 <- mapData2()
             if (input$isoline)
                 progress$set(value=0.6, message="Generating isolines....")
-            iline1 <- isolines()
+            iline1 <- isolines1()
             iline2 <- isolines2()
             chkDta <- inherits(mdta1, "sf") & inherits(mdta2, "sf")
             if (!chkDta) {
@@ -486,6 +542,7 @@ map2dServer <- function(id, cman) {
                 progress$set(value=0.9, message="Done. Loading maps....")
             }
         })
+
         shiny::observeEvent(input$genMapVector, {
 
             progress <- shiny::Progress$new()
@@ -514,12 +571,16 @@ map2dServer <- function(id, cman) {
                 shinyjs::hide(id="map2d-card")
             }
         })
-        shiny::observeEvent(input$getFeat, {
-            mprox <- mapgl::mapboxgl_proxy("map2d")
-            feats <- mapgl::get_drawn_features(map=mprox)
-            cman$lines <- feats[grepl("LINESTRING", sf::st_geometry_type(feats)), ]
-            cman$pols <- feats[grepl("POLYGON", sf::st_geometry_type(feats)), ]
-        })
+
+        shiny::observeEvent(input$tsIdxVector, {
+            mprox <- mapgl::maplibre_proxy(mapId="map2dVector")
+            vec <- vecData()[[input$tsIdxVector]]
+            if (inherits(vec, "sf"))
+                mapgl::set_source(mprox, layer_id=session$ns("map2d-vector"), source=)
+            else
+                shiny::showNotification("Velocity map is not available for the selected time step!")
+        }, ignoreInit = TRUE)
+
         shiny::observeEvent(input$cases1, {
             caseHash <- cman$tbl[caseName %in% input$cases1, hash]
             if (length(caseHash) < 1)
@@ -533,13 +594,21 @@ map2dServer <- function(id, cman) {
             aM <- addUgrid(path=cman$tbl[hash == sampleHash, path], cman=cman)
             ncVars <- aM$m2D$face
             ncVars <- ncVars[!ncVars %in% aM$m2D$topo]
+            if (any(aM$vars[!is.na(ndims), ndims > 2])) {
+                shinyjs::show("lyr")
+                shiny::updateSliderInput(inputId="lyr", max=aM$dims[name == aM$m2D$topo$layer_dimension, length])
+            } else {
+                shinyjs::hide("lyr")
+            }
             shiny::updateSelectInput(inputId="ncVar1", choices=names(ncVars))
             if (length(aM$totalTs) > 0) {
                 tsIds <- seq.int(1, aM$totalTs, 1)
                 names(tsIds) <- aM$ts
-                shiny::updateSelectizeInput(inputId="tsIdx1", choices=tsIds, server=TRUE)
+                shiny::updateSelectizeInput(inputId="tsIdx1", choices=tsIds, server=TRUE, selected=tsIds[2])
+                shiny::updateSliderInput(inputId="aniTsIdx", max=aM$totalTs)
+                shiny::updateSliderInput(inputId="tsIdxVector", max=aM$totalTs)
                 if (!chkChr(input$cases2))
-                    shiny::updateSelectizeInput(inputId="tsIdx2", choices=tsIds, server=TRUE)
+                    shiny::updateSelectizeInput(inputId="tsIdx2", choices=tsIds, server=TRUE, selected=tsIds[2])
             }
             ncLst <- cman$tbl$hash
             tbl <- rbind(cman$tbl[caseName %in% input$cases1], cman$tbl[!caseName %in% input$cases1])
@@ -552,6 +621,7 @@ map2dServer <- function(id, cman) {
             }
             progress$set(value=0.9, message="Done.")
         }, ignoreInit=TRUE)
+
         shiny::observeEvent(input$cases2, {
             caseHash <- cman$tbl[caseName %in% input$cases2, hash]
             if (length(caseHash) < 1)
@@ -566,12 +636,18 @@ map2dServer <- function(id, cman) {
             ncVars <- aM$m2D$face
             ncVars <- ncVars[!ncVars %in% aM$m2D$topo]
             shiny::updateSelectInput(inputId="ncVar2", choices=names(ncVars))
+            if (any(aM$vars[!is.na(ndims), ndims > 2])) {
+                shinyjs::show("lyr")
+                shiny::updateSliderInput(inputId="lyr", max=aM$dims[name == aM$m2D$topo$layer_dimension, length])
+            } else {
+                shinyjs::hide("lyr")
+            }
             if (length(aM$totalTs) > 0) {
                 tsIds <- seq.int(1, aM$totalTs, 1)
                 names(tsIds) <- aM$ts
-                shiny::updateSelectizeInput(inputId="tsIdx2", choices=tsIds, server=TRUE)
+                shiny::updateSelectizeInput(inputId="tsIdx2", choices=tsIds, server=TRUE, selected=tsIds[2])
                 if (!chkChr(input$cases1))
-                    shiny::updateSelectizeInput(inputId="tsIdx1", choices=tsIds, server=TRUE)
+                    shiny::updateSelectizeInput(inputId="tsIdx1", choices=tsIds, server=TRUE, selected=tsIds[2])
             }
             tbl <- rbind(cman$tbl[caseName %in% input$cases2], cman$tbl[!caseName %in% input$cases2])
             ncLst <- shinyWidgets::prepare_choices(tbl, label=ncName,
@@ -583,22 +659,121 @@ map2dServer <- function(id, cman) {
             }
             progress$set(value=0.9, message="Done.")
         }, ignoreInit=TRUE)
+
+        observeEvent(input$findDomains, {
+            progress <- shiny::Progress$new()
+            on.exit(progress$close())
+            selectedCases <- c(input$cases1, input$cases2) |> unique()
+            selectedCases <- selectedCases[nchar(selectedCases) > 0]
+            if (length(selectedCases) < 1) {
+                shiny::showNotification("Please select a case first!")
+                return(NULL)
+            }
+            feats <- cman$layer[cman$layer$featId %in% input$feats, ]
+            if (isTRUE(nrow(feats) < 1) | !inherits(feats, "sf")) {
+                shiny::showNotification("Please select at least one feature of interest first!")
+                return(NULL)
+            }
+            hashes <- cman$tbl[caseName %in% selectedCases, hash]
+            thisHashes <- hashes[!hashes %in% names(cman$ugrids)]
+            nCores <- parallel::detectCores()
+            doParallel::registerDoParallel(cores = parallel::detectCores() - 1)
+            `%dopar%` <- foreach::`%dopar%`
+            tbl <- data.table::copy(cman$tbl)
+            if (length(cman$ugrids) > 0) {
+                progress$set(value=0.3, message=paste0("Generating face polygons for: ",
+                                                       length(cman$ugrids), " domains if necessary..."))
+                cMeshes <- foreach::foreach(aM=cman$ugrids, .combine=c) %dopar% {
+                    aM$buildFace2DPoly()
+                    list(aM)
+                }
+                names(cMeshes) <- names(cman$ugrids)
+                cman$ugrids <- cMeshes
+            }
+            if (length(thisHashes) > 0) {
+                progress$set(value=0.6, message=paste0("Generating face polygons for: ",
+                                                       length(thisHashes), " more domains..."))
+                meshes <- foreach::foreach(aH=thisHashes, .combine=c) %dopar% {
+                    aM <- Ugrid$new(tbl[hash==aH, path], crs=tbl[hash==aH, crsid])
+                    aM$buildFace2DPoly()
+                    ret <- list(aM)
+                    names(ret) <- aH
+                    ret
+                }
+                cman$ugrids <- c(cman$ugrids, meshes)
+            }
+            progress$set(value=0.8, message=paste0("Finding relevant domains..."))
+            ringLst <- lapply(hashes, function(x) {
+                if (is.na(sf::st_crs(cman$ugrids[[x]]$m2D$fRing))) {
+                    if (is.na(tbl[hash == x, crsid])) {
+                        return(x)
+                    } else {
+                        cman$ugrids[[x]]$crs <- tbl[hash == x, crsid]
+                        sf::st_crs(cman$ugrids[[x]]$m2D$face2D) <- tbl[hash == x, crsid]
+                        sf::st_crs(cman$ugrids[[x]]$m2D$fRing) <- tbl[hash == x, crsid]
+                    }
+                }
+                pol <- sf::st_transform(cman$ugrids[[x]]$m2D$fRing, "EPSG:4326")
+                return(pol)
+            })
+            woCrs <- ringLst[sapply(ringLst, chkChr)] |> unlist()
+            if (length(woCrs) > 0) {
+                woCrsCases <- tbl[hash %in% woCrs, unique(caseName)] |> paste(collapse=", ")
+                shiny::showNotification(paste0("Following cases have no CRS: ", woCrsCases, ".
+                                               Please check again or assign a CRS to the cases."))
+                return(NULL)
+            } else {
+                # ignore.attr = TRUE because there are sometimes MULTIPOLYGON inside
+                fRings <- data.table::rbindlist(ringLst, ignore.attr = TRUE) |> sf::st_as_sf()
+                fRings <- merge(fRings, tbl[, c("caseName", "path")], by="path")
+                pols <- feats[grepl("POLYGON", feats$ftype, fixed=TRUE), ]
+                polsOverlap <- sf::st_overlaps(pols, fRings)
+                pRet <- list()
+                for (i in seq_along(polsOverlap)) {
+                    pRet[[pols$featId[i]]] <- fRings$path[polsOverlap[[i]]]
+                }
+                lines <- feats[grepl("LINESTRING", feats$ftype, fixed=TRUE), ]
+                lineInt <- sf::st_intersects(lines, fRings)
+                lineRet <- list()
+                for (i in seq_along(lineInt)) {
+                    lineRet[[lines$featId[i]]] <- fRings$path[lineInt[[i]]]
+                }
+                selectedPath <- c(polsOverlap, lineInt) |> unlist(use.names = FALSE) |> unique() |> sort()
+                if (length(selectedPath) < 1) {
+                    progress$set(value=0.95, message=paste0("No domains found intersected / overlapped with the selected features"))
+                } else {
+                    selectedHash1 <- tbl[path %in% fRings$path[selectedPath] & caseName %in% input$cases1, hash]
+                    selectedHash2 <- tbl[path %in% fRings$path[selectedPath] & caseName %in% input$cases2, hash]
+                    shinyWidgets::updateVirtualSelect(inputId="ncNames1", selected=selectedHash1)
+                    shinyWidgets::updateVirtualSelect(inputId="ncNames2", selected=selectedHash2)
+                    cman$selectedByLines <- lineRet
+                    cman$selectedByPols <- pRet
+                    cman$selectedHash1 <- selectedHash1
+                    cman$selectedHash2 <- selectedHash2
+                    progress$set(value=0.95, message=paste0("Done."))
+                }
+            }
+        })
+
         output$map2d <- mapgl::renderMaplibre({
             map2d()
         })
+
         output$map2dCmp <- mapgl::renderMaplibreCompare({
             map2dCmp()
         })
+
         output$map2dVector <- mapgl::renderMaplibre({
             map2dVec()
         })
+
         shiny::observeEvent(input$prepDl, {
 
             progress <- shiny::Progress$new()
             on.exit(progress$close())
             shinyjs::hide("dlMap")
             progress$set(value=0.3, message="Reading data from NetCDF if not yet...")
-            mdta1 <- isolate(mapData())
+            mdta1 <- isolate(mapData1())
             mdta2 <- NULL
             withMap2 <- !is.null(isolate(map2dCmp()))
             if (withMap2)
@@ -607,7 +782,7 @@ map2dServer <- function(id, cman) {
             iline1 <- NULL
             iline2 <- NULL
             if (withIsoline) {
-                iline1 <- isolate(isolines())
+                iline1 <- isolate(isolines1())
                 if (withMap2)
                     iline2 <- isolate(isolines2())
             }
@@ -644,6 +819,7 @@ map2dServer <- function(id, cman) {
                 )
             progress$set(value=0.9, message="Data is being prepared in background. The download button will be enabled when the preparation is done...")
         })
+
         output$dlMap <- shiny::downloadHandler(
             filename=paste0(input$ncVar1, "_map_data.gpkg"),
             contentType="application/geopackage",

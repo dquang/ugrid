@@ -3,6 +3,8 @@ map2dCalcUi <- function(id) {
 
     ns <- shiny::NS(id)
     shiny::addResourcePath("img", system.file("app/www/img", package="ugrid"))
+    tmpFolder <- tempdir()
+    shiny::addResourcePath("raster", tmpFolder)
     bslib::layout_sidebar(
         shinyjs::useShinyjs(),
         sidebar=bslib::sidebar(
@@ -11,6 +13,7 @@ map2dCalcUi <- function(id) {
                 open=c("Data source"), multiple=FALSE,
                 bslib::accordion_panel(
                     title="Data source", icon=shiny::icon("folder-open"),
+                    shiny::sliderInput(ns("lyr"), "Select a layer", min=1L, max=10L, value=1L, sep=1L),
                     shiny::p("To update the values for variables and time step, please select a case below."),
                     shiny::textInput(ns("resolution"), label="Raster resolution",
                                      placeholder="one ore two numbers seperated by a space for raster resolution"),
@@ -85,23 +88,20 @@ map2dCalcUi <- function(id) {
         ),
         shiny::fluidRow(
             shiny::column(6, shiny::div(class="d-grid gap-2", bslib::input_task_button(
-                id=ns("genMap"), label="Generate map...", width='100%')))
-            # shiny::column(4, shiny::div(class="d-grid gap-2", bslib::input_task_button(
-            #     id=ns("genCmpMap"), label="Generate comparing map...", width='100%')))
+                id=ns("genMap"), label="Generate map...", width='100%'))),
+            shiny::column(4, shiny::div(class="d-grid gap-2", bslib::input_task_button(
+                id=ns("genAll"), label="Generate rasters for all time steps...", width='100%')))
         ),
         bslib::card(
             height="75vh", full_screen=TRUE, id=ns("map2d-card"),
-            shinycssloaders::withSpinner(
-                image="img/working.gif",
-                leaflet::leafletOutput(ns("map2d"), height="550px"))
-            # bslib::input_task_button(ns("getFeat"), "Get drawn features")
+            tmap::tmapOutput(ns("map2d"), height="550px"),
+            shiny::sliderInput(ns("tsIdxAni"), "Explore result by time step", min=1, max=100, step=1, value=1,
+                               animate=shiny::animationOptions(interval=2000, playButton="Play", pauseButton="Pause"))
             ),
         bslib::card(
             height="75vh", full_screen=TRUE, id=ns("map2d-cmp-card"),
-            shinycssloaders::withSpinner(
-                image="img/working.gif",
-                leaflet::leafletOutput(ns("map2dCmp"), height="550px")
-            )
+            shiny::imageOutput(ns("gif"), height="500px")
+            # leaflet::leafletOutput(ns("map2dCmp"), height="550px")
         )
 
     )
@@ -111,60 +111,72 @@ map2dCalcServer <- function(id, cman) {
 
     shiny::moduleServer(id=id, function(input, output, session) {
 
+        shinyjs::hide(id="lyr")
         shinyjs::hide(id="dlMap")
         shinyjs::hide(id="map2d-cmp-card")
         shinyjs::hide(id="map2d-card")
         map2d <- shiny::reactiveVal()
         map2dCmp <- shiny::reactiveVal()
         gpkgFile <- shiny::reactiveVal()
-        bbox1 <- shiny::reactiveVal()
-        bbox2 <- shiny::reactiveVal()
-
-        shiny::observe({
-            palTbl <- getC4aTable(
-                type="cat", n=input$nClass + 1,
+        rasters <- shiny::reactiveValues(tmpFolder=tempdir())
+        palTbl <- shiny::reactive({
+            getC4aTable(
+                type=c("cat", "seq"), n=input$nClass + 1,
                 filters=input$colFilters, series=input$colSeries
             )
+        })
+        shiny::observeEvent(palTbl(), {
             updateColorPaletteInput(
                 inputId="colPal", reverse=input$colReverse, continuous=input$continuous,
-                palTbl=palTbl)
-
+                selected=input$colPal, palTbl=palTbl())
         })
-
         mapData1 <- shiny::reactive({
-            ret <- NULL
             ncNames1 <- input$ncNames1[nchar(input$ncNames1) > 0]
-            if (length(ncNames1) > 0) {
-                selectedMeshes <- lapply(cman$tbl[hash %in% ncNames1, path], addUgrid, cman=cman)
-                tsIdx <- ifelse(input$agg1 == "none", input$tsIdx1, -1L)
-                ret <- getMapData(mesh=selectedMeshes, variable=input$ncVar1, tsIdx=tsIdx, agg=input$agg1)
-                if (is(ret, "sf")) {
-                    bbox1(round(sf::st_bbox(ret)))
-                    res <- sf::st_area(ret[sample.int(nrow(ret), 1), ]) |> sqrt() |> pretty()
-                    shiny::updateTextInput(inputId="resolution",
-                                           label=paste0("Raster resolution (suggest: ", res[1], ")"))
-                }
+            agg1 <- input$agg1
+            tsIdx1 <- ifelse(input$agg1 == "none", input$tsIdx1, -1L)
+            ncVar1 <- input$ncVar1
+            selectedMeshes <- lapply(cman$tbl[hash %in% ncNames1, path], addUgrid, cman=cman)
+            if (length(selectedMeshes) < 1)
+                return(NULL)
+            meshLst <- getMapData(mesh=selectedMeshes, variable=ncVar1, tsIdx=tsIdx1, agg=agg1)
+            polLst <- list()
+            for (i in seq_along(meshLst)) {
+                polLst[[i]] <- data.table::data.table(meshLst[[i]]$ret)
+                meshLst[[i]]$ret <- NULL
+                thisHash <- cman$tbl[path == meshLst[[i]]$path, hash]
+                cman$ugrids[[thisHash]] <- meshLst[[i]]
             }
+            ret <- sf::st_as_sf(data.table::rbindlist(polLst))
             return(ret)
         })
+
         mapData2 <- shiny::reactive({
 
             ncNames2 <- input$ncNames2[nchar(input$ncNames2) > 0]
             if (length(ncNames2) < 1)
                 ncNames2 <- input$ncNames1
             ncVar2 <- if (chkChr(input$ncVar2)) input$ncVar2 else input$ncVar1
-            ret <- NULL
-            if (length(ncNames2) > 0) {
-                selectedMeshes <- lapply(cman$tbl[hash %in% ncNames2, path], addUgrid, cman=cman)
-                tsIdx <- ifelse(input$agg2 == "none", input$tsIdx2, -1L)
-                ret <- getMapData(mesh=selectedMeshes, variable=ncVar2, tsIdx=tsIdx, agg=input$agg2)
-                bbox2(round(sf::st_bbox(ret)))
+            agg2 <- input$agg2
+            tsIdx2 <- ifelse(agg2 == "none", input$tsIdx2, -1L)
+            selectedMeshes <- lapply(cman$tbl[hash %in% ncNames2, path], addUgrid, cman=cman)
+            if (length(selectedMeshes) < 1)
+                return(NULL)
+            meshLst <- getMapData(mesh=selectedMeshes, variable=ncVar2, tsIdx=tsIdx2, agg=agg2)
+            polLst <- list()
+            for (i in seq_along(meshLst)) {
+                polLst[[i]] <- data.table::data.table(meshLst[[i]]$ret)
+                meshLst[[i]]$ret <- NULL
+                thisHash <- cman$tbl[path == meshLst[[i]]$path, hash]
+                cman$ugrids[[thisHash]] <- meshLst[[i]]
             }
+            ret <- sf::st_as_sf(data.table::rbindlist(polLst))
             return(ret)
         })
+
         calculatedRaster <- shiny::reactive({
 
             ncVar2 <- if (chkChr(input$ncVar2)) input$ncVar2 else input$ncVar1
+
             mdta1 <- mapData1()
             mdta2 <- mapData2()
             if (!is(mdta1, "sf") | !is(mdta2, "sf"))
@@ -183,7 +195,7 @@ map2dCalcServer <- function(id, cman) {
             } else {
                 bb <- bb1
             }
-            resolution <- strsplit(input$resolution, split=" ")[[1]]
+            resolution <- txt2NumVec(input$resolution)
             if (!rlang::is_bare_numeric(resolution)) {
                 resolution <- sf::st_area(mdta1[sample.int(nrow(mdta1), 1), 1]) |> sqrt() |> pretty()
                 resolution <- resolution[1]
@@ -225,6 +237,7 @@ map2dCalcServer <- function(id, cman) {
                 ras <- NULL
             return(ras)
         })
+
         shiny::observeEvent(input$genMap, {
 
             progress <- shiny::Progress$new()
@@ -241,18 +254,20 @@ map2dCalcServer <- function(id, cman) {
                 ncVar <- aM$getVarName(input$ncVar1)
                 varAtt <- aM$atts[varName == ncVar]
                 ts1 <- paste0("At: ", aM$ts[as.integer(input$tsIdx1)])
-                lgT1 <- sprintf("%s (%s) [%s]", input$ncVar1,
+                lgT1 <- sprintf("%s \n(%s) [%s]", input$ncVar1,
                                 ifelse(input$agg1 == "none", ts1, input$agg1),
                                 varAtt[grepl("unit", name), val])
-                map1 <- genRasterMap(pol=mdta1, field=input$ncVar1, n=input$nClass, style=input$clsStyle,
-                                     legendTitle=lgT1, mapId=session$ns("map1"), addControls=TRUE,
-                                     colPal=input$colPal, reverse=input$colReverse)
+                resolution <- txt2NumVec(input$resolution)
+                map1 <- genTmapRasterOutput(pol=mdta1, field=input$ncVar1, resolution=resolution,
+                                            n=input$nClass, style=input$clsStyle,
+                                            legendTitle=lgT1, colPal=input$colPal, reverse=input$colReverse)
                 map2d(map1)
                 shinyjs::show(id="map2d-card")
                 shinyjs::hide(id="map2d-cmp-card")
                 progress$set(value=0.9, message="Done. Loading map....")
             }
         })
+
         shiny::observeEvent(input$calculate, {
 
             ras <- calculatedRaster()
@@ -260,39 +275,96 @@ map2dCalcServer <- function(id, cman) {
                 shiny::showNotification("Check input!")
                 return(NULL)
             }
-            terra::crs(ras) <- "epsg:25833"
             values <- terra::values(ras, na.rm=TRUE)
-            mm <- range(values)
-            varClassInt <- tryCatch(
-                classInt::classIntervals(var=values, n=input$nClass, style=input$clsStyle),
-                error=function(e) NULL)
-            if (inherits(varClassInt, "classIntervals")) {
-                varColors <- cols4all::c4a(palette=input$colPal, n=length(varClassInt$brks), nm_invalid="interpolate",
-                                           reverse=input$colReverse)
-
-                labels <- format(varClassInt$brks, digits=3, scientific=(varClassInt$brks[1] < 0.001))
-                pal <- leaflet::colorNumeric(varColors, domain=varClassInt$brks, na.color="#FF000000")
-                addLegendMod <- function(map) leaflet::addLegend(map, labels=labels, colors=varColors,
-                                                                 bins=length(varClassInt$brks), opacity=1)
-            } else {
-                varColors <- cols4all::c4a(palette=input$colPal, n=input$nClass,
-                                           nm_invalid="interpolate", reverse=input$colReverse)
-                pal <- leaflet::colorNumeric(varColors, domain=values, na.color="#FF000000")
-                addLegendMod <- function(map) leaflet::addLegend(map, pal=pal, values=values, bins=input$nClass, opacity=1)
+            colInfo <- genTmapColor(values=values, n=input$nClass,
+                                    style=input$clsStyle, colPal=input$colPal, reverse=input$colReverse)
+            colScale <- tmap::tm_scale_continuous(values=colInfo$color, ticks=colInfo$brks)
+            chkTf <- sf::st_can_transform(ras, 4326)
+            if (chkTf) {
+                ras <- terra::project(ras, "epsg:4326")
             }
-            map1 <- leaflet::leaflet() |>
-                leaflet::addTiles() |>
-                leaflet::addRasterImage(ras, colors=pal, opacity=1) |>
-                addLegendMod()
+            legendTitle <- paste("Calculation: Raster 1", input$operator, "Raster 2.")
+            tm <- tmap::tm_shape(ras) +
+                tmap::tm_raster(
+                    col.free=FALSE, col_alpha.free=FALSE, col.scale=colScale,
+                    col.legend=tmap::tm_legend(legendTitle),
+                    zindex=401
+                )
+            if (chkTf)
+                tm <- tm + tmap::tm_basemap(server="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png")
             shinyjs::show(id="map2d-card")
             shinyjs::hide(id="map2d-cmp-card")
-            map2d(map1)
+            map2d(tm)
         })
 
-        output$map2d <- mapgl::renderMaplibre({
+        shiny::observeEvent(input$genAll, {
+            ncVar1 <- input$ncVar1
+            ncNames1 <- input$ncNames1[nchar(input$ncNames1) > 0]
+            ncCases1 <- input$cases1
+            chk <- chkChr(ncVar1) & (length(ncNames1) > 0) & chkChr(ncCases1)
+            if (!chk) {
+                shiny::showNotification("Check input!")
+                return(NULL)
+            }
+            selectedPath <- cman$tbl[hash %in% ncNames1, path]
+            thisHash <- digest::digest(c(sort(selectedPath), ncVar1))
+            selectedMeshes <- lapply(selectedPath, addUgrid, cman=cman)
+            tbl <- data.table::copy(cman$tbl)
+            resolution <- txt2NumVec(input$resolution)
+            vName <- selectedMeshes[[1]]$getVarName(ncVar1)
+            varUnit <- selectedMeshes[[1]]$atts[varName == vName & grepl("^unit", name, ignore.case = TRUE), val]
+            shiny::updateSliderInput(inputId="tsIdxAni", max=selectedMeshes[[1]]$totalTs)
+            shiny::showNotification("The rasters will be processed in the background. You will be informed when it has been done.")
+            shinyjs::disable("genAll")
+            shinyjs::show(id="map2d-card")
+            shinyjs::hide(id="map2d-cmp-card")
+            tmpFolder <- rasters$tmpFolder
+            promises::future_promise(
+                ugrid::genRaster4All(mesh=selectedMeshes, variable=ncVar1, folder=tmpFolder)
+            ) |>
+                promises::then(
+                    onFulfilled = function(files) {
+                        rasters[[thisHash]][["files"]] <- files
+                        rStack <- terra::rast(files)
+                        values <- terra::values(rStack)
+                        nF <- length(files)
+                        colInfo <- genTmapColor(values=values, n=input$nClass, style=input$clsStyle,
+                                                colPal=input$colPal, reverse=input$colReverse)
+                        colScale <- tmap::tm_scale(values=colInfo$color, ticks=colInfo$brks)
+                        legendTitle <- shiny::HTML(
+                            paste0(ncVar1, " [", varUnit, "]<br>(At: ", selectedMeshes[[1]]$ts[nF], ")"))
+                        rasters[[thisHash]][["colScale"]] <- colScale
+                        rasters[[thisHash]][["legendTitle"]] <- paste0(ncVar1, " [", varUnit, "]<br>(At: ")
+                        rasters[[thisHash]][["ts"]] <- selectedMeshes[[1]]$ts
+                        tm <- genRasterTmap(rStack[[nF]], colScale=colScale, legendTitle=legendTitle)
+                        map2d(tm)
+                        shiny::showNotification("Raster data is ready for exploring!")
+                        shinyjs::enable("genAll")
+                    },
+                    onRejected = function(reason) {
+                        shiny::showNotification(paste0("Fail to prepare rasters. Reason: ", reason$message))
+                        shinyjs::enable("genAll")
+                    }
+                )
+        })
+
+        output$map2d <- tmap::renderTmap({
             map2d()
         })
-        observeEvent(input$findDomains, {
+        shiny::observeEvent(input$tsIdxAni, {
+            ncNames1 <- input$ncNames1[nchar(input$ncNames1) > 0]
+            selectedPath <- cman$tbl[hash %in% ncNames1, path]
+            thisHash <- digest::digest(c(sort(selectedPath), input$ncVar1))
+            if (!thisHash %in% names(rasters))
+                return(NULL)
+            legendTitle <- shiny::HTML(
+                paste0(rasters[[thisHash]]$legendTitle, rasters[[thisHash]]$ts[input$tsIdxAni], ")"))
+            ras <- terra::rast(rasters[[thisHash]]$files[input$tsIdxAni])
+            tm <- genRasterTmap(ras, colScale=rasters[[thisHash]]$colScale, legendTitle=legendTitle)
+            map2d(tm)
+        }, ignoreInit = TRUE)
+
+        shiny::observeEvent(input$findDomains, {
             progress <- shiny::Progress$new()
             on.exit(progress$close())
             selectedCases <- c(input$cases1, input$cases2) |> unique()
@@ -355,6 +427,7 @@ map2dCalcServer <- function(id, cman) {
                                                Please check again or assign a CRS to the cases."))
                 return(NULL)
             } else {
+                # ignore.attr = TRUE because there are sometimes MULTIPOLYGON inside
                 fRings <- data.table::rbindlist(ringLst, ignore.attr = TRUE) |> sf::st_as_sf()
                 fRings <- merge(fRings, tbl[, c("caseName", "path")], by="path")
                 pols <- feats[grepl("POLYGON", feats$ftype, fixed=TRUE), ]
@@ -382,6 +455,7 @@ map2dCalcServer <- function(id, cman) {
             }
 
         })
+
         shiny::observeEvent(input$cases1, {
             caseHash <- cman$tbl[caseName %in% input$cases1, hash]
             if (length(caseHash) < 1)
@@ -399,9 +473,9 @@ map2dCalcServer <- function(id, cman) {
             if (length(aM$totalTs) > 0) {
                 tsIds <- seq.int(1, aM$totalTs, 1)
                 names(tsIds) <- aM$ts
-                shiny::updateSelectizeInput(inputId="tsIdx1", choices=tsIds, server=TRUE)
+                shiny::updateSelectizeInput(inputId="tsIdx1", choices=tsIds, server=TRUE, selected=tsIds[2])
                 if (!chkChr(input$cases2))
-                    shiny::updateSelectizeInput(inputId="tsIdx2", choices=tsIds, server=TRUE)
+                    shiny::updateSelectizeInput(inputId="tsIdx2", choices=tsIds, server=TRUE, selected=tsIds[2])
             }
             tbl <- rbind(cman$tbl[caseName %in% input$cases1], cman$tbl[!caseName %in% input$cases1])
             ncLst <- shinyWidgets::prepare_choices(tbl, label=ncName,
@@ -413,6 +487,7 @@ map2dCalcServer <- function(id, cman) {
             }
             progress$set(value=0.9, message="Done.")
         }, ignoreInit=TRUE)
+
         shiny::observeEvent(input$cases2, {
             caseHash <- cman$tbl[caseName %in% input$cases2, hash]
             if (length(caseHash) < 1)
@@ -430,9 +505,9 @@ map2dCalcServer <- function(id, cman) {
             if (length(aM$totalTs) > 0) {
                 tsIds <- seq.int(1, aM$totalTs, 1)
                 names(tsIds) <- aM$ts
-                shiny::updateSelectizeInput(inputId="tsIdx2", choices=tsIds, server=TRUE)
+                shiny::updateSelectizeInput(inputId="tsIdx2", choices=tsIds, server=TRUE, selected=tsIds[2])
                 if (!chkChr(input$cases1))
-                    shiny::updateSelectizeInput(inputId="tsIdx1", choices=tsIds, server=TRUE)
+                    shiny::updateSelectizeInput(inputId="tsIdx1", choices=tsIds, server=TRUE, selected=tsIds[2])
             }
             tbl <- rbind(cman$tbl[caseName %in% input$cases2], cman$tbl[!caseName %in% input$cases2])
             ncLst <- shinyWidgets::prepare_choices(tbl, label=ncName,
@@ -444,6 +519,7 @@ map2dCalcServer <- function(id, cman) {
             }
             progress$set(value=0.9, message="Done.")
         }, ignoreInit=TRUE)
+
         shiny::observeEvent(input$prepDl, {
 
             progress <- shiny::Progress$new()
@@ -496,6 +572,7 @@ map2dCalcServer <- function(id, cman) {
                 )
             progress$set(value=0.9, message="Data is being prepared in background. The download button will be enabled when the preparation is done...")
         })
+
         output$dlMap <- shiny::downloadHandler(
             filename=paste0(input$ncVar1, "_map_data.gpkg"),
             contentType="application/geopackage",

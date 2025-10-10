@@ -41,11 +41,14 @@ appUi <- function(request) {
          uiHome(),
          uiSetting(),
          uiResultMap(),
-         uiRasterCalculation()
+         uiRasterCalculation(),
+         uiResultGraphic(),
+         uiResultLayer()
         )
 }
 
 uiHome <- function() {
+
     bslib::nav_panel(
         title="Home", value="tpHome",
         h2('Postprocessing tools for UGRID-NetCDF data'),
@@ -80,7 +83,7 @@ uiHome <- function() {
                 column(3,
                        actionButton(
                            "btnH2Profile", label=HTML("<br> Long profile"),
-                           icon=icon(name="chart-line", "fa-3x"), disabled = TRUE,
+                           icon=icon(name="chart-line", "fa-3x"),
                            style='height: 150px; width: 300px; font-size: 20px')),
                 column(3,
                        actionButton(
@@ -89,8 +92,8 @@ uiHome <- function() {
                            style='height: 150px; width: 300px; font-size: 20px')),
                 column(3,
                        actionButton(
-                           "btnH2Case", label=HTML("<br> Case information"),
-                           icon=icon(name="map", "fa-3x"), disabled = TRUE,
+                           "btnH2Layer", label=HTML("<br> Vertical results"),
+                           icon=icon(name="map", "fa-3x"),
                            style='height: 150px; width: 300px; font-size: 20px')),
                 column(1, p())
             )
@@ -153,7 +156,7 @@ uiSetting <- function() {
 uiResultMap <- function() {
 
     bslib::nav_panel(
-        title = "Results as Map", value = "tpMap",
+        title = "Result as Map", value = "tpMap",
         map2dUi("retMap")
     )
 }
@@ -166,29 +169,51 @@ uiRasterCalculation <- function() {
     )
 }
 
+uiResultGraphic <- function() {
+
+    bslib::nav_panel(
+        title = "Result as Graphics", value = "tpLine",
+        map2dLineUi("retLine")
+    )
+}
+
+uiResultLayer <- function() {
+
+    bslib::nav_panel(
+        title = "3D-Result", value = "tpLayer",
+        map2dLayerUi("retLayer")
+    )
+}
+
 appServer <- function(input, output, session) {
 
+    tmap::tmap_mode("view")
     # options(shiny.trace="recv")
     # increasing max filesize to upload to 100Mb
     options(shiny.maxRequestSize=100*1024^2)
     options(ugrid.pattern="_map\\.nc$")
     if (!exists("cman")) {
         cman <- initCaseManager()
-        # cLst <- ctbl$casePath[5:6]
-        # names(cLst) <- ctbl$caseName[5:6]
-        # addCases(cLst, cman=cman, pattern="_map\\.nc$", crs=25833)
     }
     shiny::updateSelectizeInput(inputId="addSelectedCase", choices=ctbl$caseName, server=TRUE)
     map2dServer(id="retMap", cman=cman)
     map2dCalcServer(id="raster", cman=cman)
+    map2dLineServer(id="retLine", cman=cman)
+    map2dLayerServer(id="retLayer", cman=cman)
     observeEvent(input$btnH2Map, {
         bslib::nav_select(id="navbar", selected="tpMap")
     })
     observeEvent(input$btnH2Rast, {
         bslib::nav_select(id="navbar", selected="tpRaster")
     })
+    observeEvent(input$btnH2Profile, {
+        bslib::nav_select(id="navbar", selected="tpLine")
+    })
     observeEvent(input$btnH2Set, {
         bslib::nav_select(id="navbar", selected="tpSetting")
+    })
+    observeEvent(input$btnH2Layer, {
+        bslib::nav_select(id="navbar", selected="tpLayer")
     })
     observeEvent(input$featFile, {
         fInfo <- isolate(input$featFile) |> data.table::as.data.table()
@@ -275,7 +300,6 @@ appServer <- function(input, output, session) {
         if (!chk) {
             shiny::showNotification("Please select at least one case and select also CRS.")
         } else {
-            browser()
             cman$tbl[caseName %in% input$cases, crsid := input$caseCrs]
             ncHash <- cman$tbl[caseName %in% input$cases, hash]
             addedHash <- names(cman$ugrids)
@@ -302,6 +326,8 @@ appServer <- function(input, output, session) {
         shinyWidgets::updateVirtualSelect(inputId="retMap-cases2", choices=cman$cases)
         shinyWidgets::updateVirtualSelect(inputId="raster-cases1", choices=cman$cases)
         shinyWidgets::updateVirtualSelect(inputId="raster-cases2", choices=cman$cases)
+        shinyWidgets::updateVirtualSelect(inputId="retLine-cases1", choices=cman$cases)
+        shinyWidgets::updateVirtualSelect(inputId="retLayer-cases1", choices=cman$cases)
     })
 }
 

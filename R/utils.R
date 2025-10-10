@@ -186,10 +186,11 @@ blankGgplot <- function(e="Error while creating plot") {
 txt2NumVec <- function(x) {
 
     ret <- stringi::stri_replace_all_fixed(x, ",", ".") |>
-        stringi::stri_split_fixed(" ") |>
+        stringi::stri_split_fixed(" ") |> unlist() |>
         as.numeric()
     ret <- ret[!is.na(ret)]
-
+    if (length(ret) < 1)
+        ret <- NULL
     return(ret)
 }
 
@@ -206,6 +207,7 @@ xy2station <- function(
         stationSearchUrl="https://via.bund.de/wsv/bwastr-locator/rest/stationierung/query"
 ) {
 
+    colnames(tbl) <- tolower(colnames(tbl))
     tbl <- data.table::as.data.table(tbl[, c("x", "y")])
     tbl[, qid := .I][, wkid := crsid]
     tbl[, qr := sprintf(
@@ -246,12 +248,12 @@ checkFuture <- function(feat) {
 
 # check if x is a single double and not NA
 chkDbl <- function(x) {
-    rlang::is_scalar_double(x) & !rlang::is_na(x)
+    rlang::is_bare_numeric(x, n=1) & !rlang::is_na(x)
 }
 
 # check if x is a single integer and not NA
 chkInt <- function(x) {
-    rlang::is_scalar_integer(x) & !rlang::is_na(x)
+    rlang::is_bare_integer(x, n=1) & !rlang::is_na(x)
 }
 
 # check if x is a single integer and not NA
@@ -282,3 +284,20 @@ bbLst2Pol <- function(bbLst, crs=sf::st_crs()) {
     return(pol)
 }
 
+rowAgg <- function(agg=c("min", "max", "mean")) {
+    agg <- match.arg(agg)
+    ret <- switch(agg,
+                     "max" = function(x) {
+                         ret <- matrixStats::rowMaxs(x=x, na.rm=TRUE)
+                         ret[is.infinite(ret)] <- NaN
+                         ret
+                     },
+                     "min" = function(x) {
+                         ret <- matrixStats::rowMins(x=x, na.rm=TRUE)
+                         ret[is.infinite(ret)] <- NaN
+                         ret
+                     } ,
+                     "mean" = function(x) matrixStats::rowMeans2(x=x, na.rm=TRUE)
+    )
+    return(ret)
+}

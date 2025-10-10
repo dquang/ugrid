@@ -92,6 +92,9 @@ Ugrid <- R6::R6Class(
                 face2DDimId <- dims[name == m2DTopo$face_dimension, id]
                 face2DVars <- vars[(dim1 == face2DDimId | dim2 == face2DDimId | dim3 == face2DDimId) &
                                        !grepl("_coordinate$|_Numlimdt", standard_name)]
+                faceDupStd <- face2DVars[duplicated(standard_name), standard_name]
+                face2DVars[standard_name %in% faceDupStd,
+                           standard_name := paste0(standard_name, sub(topo2D, "", name))]
                 face2DVarStdNames <- as.list(face2DVars$name)
                 names(face2DVarStdNames) <- face2DVars$standard_name
                 face2DVarStdNames$face_x <- m2DTopo$face_coordinates[1]
@@ -103,8 +106,23 @@ Ugrid <- R6::R6Class(
                     interfaceVars <- vars[(dim1 == interfaceDimId | dim2 == interfaceDimId |
                                                dim3 == interfaceDimId) &
                                               !grepl("_coordinate$|_Numlimdt", standard_name)]
+                    interfaceDupStd <- interfaceVars[duplicated(standard_name), standard_name]
+                    interfaceVars[standard_name %in% interfaceDupStd,
+                               standard_name := paste0(standard_name, sub(topo2D, "", name))]
                     interfaceStdNames <- as.list(interfaceVars$name)
                     names(interfaceStdNames) <- interfaceVars$standard_name
+                }
+                layerDimId <- dims[grepl("layer", name, ignore.case = TRUE), id]
+                layerStdNames <- NULL
+                if (length(layerDimId) > 0) {
+                    layerVars <- vars[(dim1 == layerDimId | dim2 == layerDimId |
+                                               dim3 == layerDimId) &
+                                              !grepl("_coordinate$|_Numlimdt", standard_name)]
+                    layerDupStd <- layerVars[duplicated(standard_name), standard_name]
+                    layerVars[standard_name %in% layerDupStd,
+                                  standard_name := paste0(standard_name, sub(topo2D, "", name))]
+                    layerStdNames <- as.list(layerVars$name)
+                    names(layerStdNames) <- layerVars$standard_name
                 }
                 # edge-node start index
                 if (length(m2DTopo$edge_node_connectivity) == 1) {
@@ -132,7 +150,7 @@ Ugrid <- R6::R6Class(
                 }
                 self$m2D <- list(topo=m2DTopo, node=node2DVarStdNames,
                                  edge=edge2DVarStdNames, face=face2DVarStdNames,
-                                 interface=interfaceStdNames)
+                                 interface=interfaceStdNames, layer=layerStdNames)
             }
             topo3D <- atts[grepl("topology_dimension", name) & val == "3", varName]
             if (length(topo3D) == 1) {
@@ -151,12 +169,12 @@ Ugrid <- R6::R6Class(
                 tzShift <- stringi::stri_match_first_regex(
                     t0, "since .* ([+-]*\\d+):\\d+")[, 2]
                 tzShift <- as.integer(tzShift)
-                tzSign <- ifelse(tzShift <= 0, "-", "+")
+                tzSign <- ifelse(tzShift < 0, "-", "+")
                 tz <- paste0("Etc/GMT", tzSign, tzShift)
                 t0 <- stringi::stri_match_first_regex(t0,"since (.+)")[, 2]
                 t0 <- asPOSIXctManyFormats(t0, tz=tz)
                 ts <- RNetCDF::var.get.nc(self$nc, "time")
-                if (tUnitFactor > 1)
+                if (tUnitFactor != 1)
                     ts <- ts * tUnitFactor
                 self$ts <- as.POSIXct(ts, tz=tz, origin=t0)
                 self$t0 <- t0
@@ -172,11 +190,11 @@ Ugrid <- R6::R6Class(
                 wkt <- crsAtt[grepl("wkt", name), unlist(val)]
                 epsg <- crsAtt[grepl("epsg", name, ignore.case=TRUE), unlist(val)][1]
                 epsg <- paste0("EPSG:", epsg)
-                thisCrs <- tryCatch(suppressWarnings(sf::st_crs(wkt)), error=function(e) NULL)
-                if (is.null(thisCrs))
-                    thisCrs <- tryCatch(suppressWarnings(sf::st_crs(epsg)), error=function(e) NULL)
-                if (is.null(thisCrs))
-                    thisCrs <- tryCatch(suppressWarnings(sf::st_crs(projStr)), error=function(e) NULL)
+                for (x in list(wkt, epsg, projStr)) {
+                    thisCrs <- tryCatch(suppressWarnings(sf::st_crs(x)), error=function(e) NULL)
+                    if (!is.null(thisCrs))
+                        break
+                }
                 if (is.null(thisCrs))
                     message("Cannot detect CRS from NetCDF file.")
                 else
@@ -190,6 +208,11 @@ Ugrid <- R6::R6Class(
             ptr <- attributes(self$nc)
             if (identical(ptr$handle_ptr, new("externalptr")))
                 self$nc <- RNetCDF::open.nc(self$path)
+        },
+        #' @description
+                #' Close the NetCDF connection
+        finalize = function() {
+            RNetCDF::close.nc(self$nc)
         }
     ),
     active = list(
@@ -244,28 +267,43 @@ Ugrid <- R6::R6Class(
             invisible(self)
         },
         #' @description
-        #' Find variable based on standard_name or name
-        #' @param variable Character of standard name (UGRID) or name of the variable
-        #' @param topo Topology (m1D, m2D, or m3D)
-        #' @param at Type of elements (node, edge, face, interface, or volume)
+        #' Find variable based on standard_name or name (case-insensitive).
+        #' If there are two more nc variables found, the first one will be given.
+        #' @param variable Character of standard name (UGRID) or name of the variable.
+        #' @param topo Topology (m1D, m2D, or m3D).
+        #' @param at Type of elements (node, edge, face, interface, layer, or volume).
         getVarName = function(variable,
                               topo=c("m2D", "m1D", "m3D"),
-                              at=c("face", "node", "edge", "volume", "interface")) {
+                              at=c("face", "node", "edge", "volume", "interface", "layer")) {
 
             topo <- match.arg(topo)
             at <- match.arg(at)
             if (!chkChr(variable)) {
-                return(NULL)
-            }
-            if (variable %in% self[[topo]][[at]]) {
-                ncVar <- variable
+                ret <- NULL
             } else {
-                ncVar <- self[[topo]][[at]][[variable]]
-                if (!chkChr(ncVar)) {
-                    message("no variable named: ", ncVar, " found for ", at, "s")
-                    return(NULL)
+                varPat <- paste0("^", variable, "$")
+                ncVar <- grep(varPat, self[[topo]][[at]], ignore.case=TRUE, value=TRUE)
+                if (length(ncVar) > 0) {
+                    ret <- ncVar
+                } else {
+                    vars <- self$vars[name %in% self[[topo]][[at]]]
+                    ncVar <- vars[grepl(varPat, standard_name, ignore.case=TRUE), name]
+                    if (length(ncVar) > 0) {
+                        ret <- ncVar
+                    } else {
+                        ncVar <- vars[grepl(varPat, long_name, ignore.case=TRUE), name]
+                        if (length(ncVar) > 0) {
+                            ret <- ncVar[1]
+                        } else {
+                            ret <- NULL
+                        }
+                    }
                 }
             }
+            if (length(ret) > 1)
+                warning("More than nc variables are found.")
+            else if (length(ret) < 1)
+                message("Found no nc variable for: ", variable)
 
             return(ncVar)
         },
@@ -301,48 +339,63 @@ Ugrid <- R6::R6Class(
         },
         #' @description
         #' Read data at nodes of 2D-Topology
-        #' @param variable Character of standard name (UGRID) or name of the variable
+        #' @param variable Character of standard name (UGRID) or name of the variable.
+        #' @param lyr layer or interface indexes, or "all" for the whole dataset.
         #' @param force Logical. Force to read from NetCDF or first get from cache?
         #' @param ... will be forwarded to `RNetCDF::var.get.nc`
-        getData4Node2D = function(variable, force=FALSE,...) {
+        getData4Node2D = function(variable, lyr="all", force=FALSE,...) {
 
-            ret <- self$getData4Any(variable=variable, force=force, topo="m2D", at="node", ...)
+            ret <- self$getData4Any(variable=variable, lyr=lyr, force=force, topo="m2D", at="node", ...)
 
             invisible(ret)
         },
         #' @description
         #' Read data at edges of 2D-Topology
         #' @param variable Character of standard name (UGRID) or name of the variable
+        #' @param lyr layer or interface indexes, or "all" for the whole dataset.
         #' @param force Logical. Force to read from NetCDF or first get from cache?
         #' @param ... will be forwarded to `RNetCDF::var.get.nc`
-        getData4Edge2D = function(variable, force=FALSE,...) {
+        getData4Edge2D = function(variable, lyr="all", force=FALSE,...) {
 
-            ret <- self$getData4Any(variable=variable, force=force, topo="m2D", at="edge", ...)
+            ret <- self$getData4Any(variable=variable, lyr=lyr, force=force, topo="m2D", at="edge", ...)
 
             invisible(ret)
         },
         #' @description
         #' Read data at faces of 2D-Topology
-        #' @param variable Character of standard name (UGRID) or name of the variable
+        #' @param variable Character of standard name (UGRID) or name of the variable.
+        #' @param lyr layer or interface indexes, or "all" for the whole dataset.
+        #' @param onlyMain If TRUE, the cell elements of other domains will be removed.
         #' @param force Logical. Force to read from NetCDF or first get from cache?
         #' @param ... will be forwarded to `RNetCDF::var.get.nc`
-        getData4Face2D = function(variable, force=FALSE,...) {
+        getData4Face2D = function(variable, lyr="all", onlyMain=FALSE, force=FALSE,...) {
 
-            ret <- self$getData4Any(variable=variable, force=force, topo="m2D", at="face", ...)
+            ret <- self$getData4Any(variable=variable, lyr=lyr, force=force, topo="m2D", at="face", ...)
 
+            if (onlyMain & chkChr(self$m2D$face$cell_domain_number)) {
+                self$readDomainInfo()
+                nd <- length(dim(ret))
+                if (nd > 2)
+                    ret <- ret[, self$m2D$fids, ]
+                else if (nd == 2)
+                    ret <- ret[self$m2D$fids, ]
+                else
+                    ret <- ret[self$m2D$fids]
+            }
             invisible(ret)
         },
         #' @description
         #' Read data for any topology
         #' @param variable Character of standard name (UGRID) or name of the variable
-        #' @param force Logical. Force to read from NetCDF or first get from cache?
         #' @param topo Topology (m1D, m2D, or m3D)
         #' @param at Type of elements (node, edge, face, interface, or volume)
+        #' @param lyr layer or interface indexes, or "all" for the whole dataset.
+        #' @param force Logical. Force to read from NetCDF or first get from cache?
         #' @param ... will be forwarded to `RNetCDF::var.get.nc`
         #' @returns A matrix or a vector.
         #' In case of matrix, the ordering of dimensions are always: interface/layer (if any) x element x time.
         #' Some special variables like "Mapping from every edge to the two faces that it separates" are excluded.
-        getData4Any = function(variable, topo, at, force=FALSE,...) {
+        getData4Any = function(variable, topo, at, lyr="all", force=FALSE, ...) {
 
             private$reOpen()
             ncVar <- self$getVarName(variable, topo=topo, at=at)
@@ -354,37 +407,101 @@ Ugrid <- R6::R6Class(
                 dta <- self[[dataSet]][[at]][[variable]]
             } else {
                 dta <- RNetCDF::var.get.nc(self$nc, variable=ncVar, ...)
-                self[[dataSet]][[at]][[variable]] <- dta
+                varDim <- self$vars[name == ncVar, .SD, .SDcols = data.table::patterns("^dim")]
+                varDim <- suppressWarnings(melt(varDim, measure.vars = list(dimId=1:3, dimName=4:6), variable.name = "tmp"))
+                varDim[, dimIdx := .I][, tmp := NULL]
+                varDim <- varDim[!is.na(dimId)]
+                if (nrow(varDim) < 2) {
+                    dta <- as.vector(dta)
+                } else {
+                    verticalDims <- c(self$m2D$topo$layer_dimension, self$m2D$topo$interface_dimension)
+                    # time has the biggest index, and is therefore the last dimension
+                    varDim[dimName == "time", idx := max(dimIdx)]
+                    # element has the second biggest index
+                    timeIdx <- varDim[dimName == "time", idx]
+                    varDim[grepl("node[s]*$|edge[s]*$|face[s]*$", dimName, ignore.case = TRUE),
+                           idx := ifelse(length(timeIdx), timeIdx - 1, dimIdx)]
+                    # vertical dimension, layer or interface, if any, has the smallest index
+                    varDim[dimName %in% verticalDims,
+                           idx := min(dimIdx, na.rm = TRUE)]
+                    newOrder <- c(
+                        varDim[!grepl("node[s]*$|edge[s]*$|face[s]*$|time", dimName, ignore.case = TRUE), idx],
+                        varDim[grepl("node[s]*$|edge[s]*$|face[s]*$", dimName, ignore.case = TRUE), idx],
+                        varDim[dimName == "time", idx])
+                    # make sure that the order of the matrix is layer/interface x element(face/edge/node) x time
+                    if (!identical(varDim$dimIdx, newOrder)) {
+                        tryCatch(dta <- aperm(dta, newOrder),
+                                 error=function(e) message("Cannot reshape the result matrix"))
+                    }
+                }
+                self[[dataSet]][[at]][[variable]] <- dta # store the whole dataset.
             }
-            varDim <- self$vars[name == ncVar, .SD, .SDcols = data.table::patterns("^dim")]
-            varDim <- suppressWarnings(melt(varDim, measure.vars = list(dimId=1:3, dimName=4:6), variable.name = "tmp"))
-            varDim[, dimIdx := .I][, tmp := NULL]
-            varDim <- varDim[!is.na(dimId)]
-            if (nrow(varDim) < 2) {
-                dta <- as.vector(dta)
-            } else {
-                verticalDims <- c(self$m2D$topo$layer_dimension, self$m2D$topo$interface_dimension)
-                # time has the biggest index, and is therefore the last dimension
-                varDim[dimName == "time", idx := max(dimIdx)]
-                # element has the second biggest index
-                timeIdx <- varDim[dimName == "time", idx]
-                varDim[grepl("node[s]*$|edge[s]*$|face[s]*$", dimName, ignore.case = TRUE),
-                       idx := ifelse(length(timeIdx), timeIdx - 1, dimIdx)]
-                # vertical dimension, layer or interface, if any, has the smallest index
-                varDim[dimName %in% verticalDims,
-                       idx := min(dimIdx, na.rm = TRUE)]
-                newOrder <- c(
-                    varDim[!grepl("node[s]*$|edge[s]*$|face[s]*$|time", dimName, ignore.case = TRUE), idx],
-                    varDim[grepl("node[s]*$|edge[s]*$|face[s]*$", dimName, ignore.case = TRUE), idx],
-                    varDim[dimName == "time", idx])
-                # make sure that the order of the matrix is layer x element(face/edge/node) x time
-                if (!identical(varDim$dimIdx, newOrder)) {
-                    tryCatch(dta <- aperm(dta, newOrder),
-                             error=function(e) message("Cannot reshape the result matrix"))
+            if (length(dim(dta)) > 2) {
+                if (!identical(lyr, "all")) {
+                    dta <- dta[lyr, , ]
                 }
             }
 
             invisible(dta)
+        },
+        #' @description
+        #' Get data on faces and assign it to the face polygon layer.
+        #' @param variable Variable name for the data
+        #' @param tsIdx Time index
+        #' @param agg Option for aggregating the data by rows. The aggregation functions come from `matrixStats` package.
+        #' @param force If TRUE, the data stored in Ugrid object, if any, will be read again.
+        #' @param onlyMain If TRUE, the cell elements of other domains will be removed.
+        getData4Polygon = function(variable, tsIdx=1L, agg="none", lyr=1L,
+                                   force=FALSE, onlyMain=FALSE, dryAsNa=TRUE) {
+
+            aP <- self$buildFace2DPoly()
+            if (!is(aP, "sf")) {
+                warning("Couldn't generate face-polygons for the file: ", self$path)
+                return(NULL)
+            }
+            aD <- self$getData4Face2D(variable=variable, lyr=lyr, force=force)
+            if (identical(variable, "sea_surface_height") & dryAsNa) {
+                altitudeVar <- self$getVarName("altitude", topo="m2D", at="face")
+                if (chkChr(altitudeVar)) {
+                    altitude <- self$getData4Face2D(variable="altitude", lyr=lyr, force=force)
+                    altitude <- as.vector(altitude)
+                    dry <- aD - altitude
+                    aD[dry] <- NaN
+                } else {
+                    warning("Cannot rea- altitude data. Values for dry faces ware not assigned as NaN.")
+                }
+            }
+            ncVar <- self$getVarName(variable, topo="m2D", at="face")
+            isTime <- self$vars[name == ncVar, isTRUE(hasTime)]
+            if (onlyMain) {
+                domains <- self$getData4Face2D("cell_domain_number", lyr=lyr)
+                if (!chkDbl(self$md))
+                    self$readDomainInfo()
+                ids <- which(domains == self$md)
+                aD <- if(isTime) aD[ids, ] else aD[ids]
+                aP <- aP[ids, ]
+            }
+            if (isTime) {
+                tsChk <- all(tsIdx %between% c(1, self$totalTs))
+                if (tsChk) {
+                    aD <- aD[, tsIdx]
+                    attr(aP, "tsIdx") <- tsIdx
+                } else if (agg %in% c("min", "max", "mean")) {
+                    aggFun <- rowAgg(agg)
+                    aD <- aggFun(aD)
+                    attr(aP, "aggFun") <- paste0("rowAgg(\"", agg, "\")")
+                }
+            }
+            digits <- if (grepl("velocity|speed", variable)) 5 else 3
+            aD <- round(aD, digits=digits)
+            tmp <- tryCatch(
+                {aP[[variable]] <- aD},
+                error=function(e) message("Couldn't assign result for: ", self$path, ".\n Reason: ", e))
+            if (!is.null(tmp)) {
+                aP[["ncName"]] <- basename(self$name)
+                self$ret <- aP
+            }
+            invisible(self)
         },
         #' @description
         #' Build polygon layer for 2D-Topology
@@ -393,7 +510,6 @@ Ugrid <- R6::R6Class(
 
             if (inherits(self$m2D$face2D, "sf"))
                 return(invisible(self$m2D$face2D))
-            private$reOpen()
             chk <- (length(self$m2D$node$node_x) != 1 | length(self$m2D$node$node_y) != 1)
             if (chk) {
                 warning("Couldn't find coordinate variables for face-nodes.")
@@ -436,6 +552,7 @@ Ugrid <- R6::R6Class(
             if (length(self$m2D$fids) > 0) {
                 facePolygon <- facePolygon[self$m2D$fids, ] |>
                     sf::st_union() |> sf::st_as_sf()
+                sf::st_geometry(facePolygon) <- "geometry"
                 facePolygon$path <- self$path
                 self$m2D$fRing <- facePolygon
             }
@@ -447,7 +564,6 @@ Ugrid <- R6::R6Class(
         #' Build line layer for 1D-Topology
         buildEdge1DLine = function() {
 
-            private$reOpen()
             chk <- (length(self$m1D$node$node_x) != 1 | length(self$m1D$node$node_y) != 1)
             if (chk) {
                 warning("Couldn't find coordinate variables for edge-nodes.")
@@ -484,15 +600,14 @@ Ugrid <- R6::R6Class(
             if (length(self$md) > 0)
                 return(self$md)
             private$reOpen()
-            fdomain <- FALSE
             if (chkChr(self$m2D$face$cell_domain_number)) {
                 cdnVal <- RNetCDF::var.get.nc(self$nc, variable=self$m2D$face$cell_domain_number)
-                fdomain <- TRUE
             } else if (chkChr(self$m1D$node$cell_domain_number)) {
                 cdnVal <- RNetCDF::var.get.nc(self$nc, variable=self$m2D$node$cell_domain_number)
             } else if (chkChr(self$m3D$face$cell_domain_number)) {
                 cdnVal <- RNetCDF::var.get.nc(self$nc, variable=self$m3D$face$cell_domain_number)
             } else {
+                self$m2D$fids <- self$dims[name == self$m2D$topo$face_dimension, seq_len(length)]
                 warning("Couldn't find cell_domain_number variable.")
                 return(NULL)
             }
@@ -503,8 +618,7 @@ Ugrid <- R6::R6Class(
             self$md <- domainTbl[1, cdn]
             # other neighbor domains
             self$od <- domainTbl[-1, cdn]
-            if (fdomain)
-                self$m2D$fids <- seq_along(cdnVal)[cdnVal == domainTbl[1, cdn]]
+            self$m2D$fids <- seq_along(cdnVal)[cdnVal == domainTbl[1, cdn]]
             invisible(self$md)
         },
 
@@ -550,7 +664,11 @@ Ugrid <- R6::R6Class(
         #' @field od other cell domain numbers
         od=NULL,
         #' @field ignoreCrsInFile If TRUE, the CRS information in the NetCDF file will be ignored.
-        ignoreCrsInFile=FALSE
+        ignoreCrsInFile=FALSE,
+        #' @field ret a field to store return result from a parallel process.
+        #' So that we can get back also the whole R6 object,
+        #' otherwise the changes to this R6 object that made during the parallel process will be lost.
+        ret=NULL
     )
 )
 

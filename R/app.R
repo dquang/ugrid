@@ -100,7 +100,7 @@ nokUi <- function() {
                            column(
                                6,
                                shiny::textInput("prj", "Path to the output folder",
-                                                value="Z:/M/M2/work/duong/prog/ugrid/dev",
+                                                value="Z:/M/M2/work/promny/NOK/Work/Modelle/250930_Test",
                                                 placeholder="only a path to public folder on Z:",
                                                 width="75vh"),
                                shiny::selectizeInput("crsid", "Select CRS", choices="EPSG:31467",
@@ -195,7 +195,7 @@ nokServer <- function(input, output, session) {
     observeEvent(input$ncFiles, {
         if (file.exists(input$ncFiles)) {
             try({
-                mesh <- Ugrid$new(input$ncFiles, newCrsid=4326)
+                mesh <- Ugrid$new(input$ncFiles, newCrs=4326)
                 if (is.na(mesh$crs))
                     mesh$crs <- sf::st_crs(input$crsid)
                 mesh$buildFace2DPoly()
@@ -228,22 +228,23 @@ nokServer <- function(input, output, session) {
                 ret[, tsIdx :=  meshNc[[input$ncFiles]][["ts"]][ii] ]
                 return(ret)
             })
-            tbl2 <- rbindlist(tbl)
+            tbl2 <- data.table::rbindlist(tbl)
             legendTitle <- paste0(
                 meshNc[[input$ncFiles]][["vars"]][name == input$nc3DVar, long_name], " [",
                 meshNc[[input$ncFiles]][["atts"]][varName == input$nc3DVar & name=="units", val], "]"
             )
+            browser()
             g <-
-                ggplot(tbl2[x < 65], aes(x = x, y = y, z=z)) +
-                geom_contour_filled(bins=input$nbins) +
-                scale_x_reverse() +
-                scale_y_continuous(limits=c(-10, 0)) +
-                coord_equal() +
+                ggplot2::ggplot(tbl2[x < 65], ggplot2::aes(x = x, y = y, z=z)) +
+                ggplot2::geom_contour_filled(bins=input$nbins) +
+                ggplot2::scale_x_reverse() +
+                ggplot2::scale_y_continuous(limits=c(-10, 0)) +
+                ggplot2::coord_equal() +
                 cols4all::scale_fill_discrete_c4a_cat(palette = colorInfo()$palette) +
-                labs(x="Distance from Brünsbuttel [km]", y="Depth [m]",
+                ggplot2::labs(x="Distance from Brünsbuttel [km]", y="Depth [m]",
                      fill=legendTitle)+
-                facet_wrap(vars(tsIdx), ncol=1) +
-                theme_bw(base_size = 14, base_family = "Arial")
+                ggplot2::facet_wrap(ggplot2::vars(tsIdx), ncol=1) +
+                ggplot2::theme_bw(base_size = 14, base_family = "Arial")
 
             return(g)
         }

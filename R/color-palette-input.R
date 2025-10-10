@@ -106,8 +106,7 @@ genPaletteContent <- function(
 colorPaletteInput <- function(
     inputId,
     label=NULL, n=5, filters="none", series=c("tableau", "brewer", "cols4all", "matplotlib"),
-    type=c("cat"),
-    range=NA, continuous=FALSE, reverse=FALSE,
+    type=c("cat", "seq"), range=NA, continuous=FALSE, reverse=FALSE,
     ...) {
     palTbl <- getC4aTable(
         type=type, n=n,
@@ -123,7 +122,8 @@ colorPaletteInput <- function(
         choicesOpt=list(content=tbl$content)
     }
     ret <- shinyWidgets::pickerInput(
-        inputId=inputId, label=label, choices=choices, choicesOpt=choicesOpt
+        inputId=inputId, label=label, choices=choices, choicesOpt=choicesOpt,
+        selected=getOption("ugrid.palette", "tableau.blue_teal")
     )
     return(ret)
 }
@@ -139,7 +139,7 @@ updateColorPaletteInput <- function(
         width=NULL,
         ...
 ) {
-    if (!is.data.table(palTbl)) {
+    if (!inherits(palTbl, "data.table")) {
         return(NULL)
     } else {
         if (length(width) != 1) {
