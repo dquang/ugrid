@@ -1,4 +1,4 @@
-#' Shiny module for
+#' Shiny module for raster output
 map2dCalcUi <- function(id) {
 
     ns <- shiny::NS(id)
@@ -373,7 +373,7 @@ map2dCalcServer <- function(id, cman) {
                 shiny::showNotification("Please select a case first!")
                 return(NULL)
             }
-            feats <- cman$layer[cman$layer$featId %in% input$feats, ]
+            feats <- cman$layer[cman$layer$id %in% input$feats, ]
             if (isTRUE(nrow(feats) < 1) | !inherits(feats, "sf")) {
                 shiny::showNotification("Please select at least one feature of interest first!")
                 return(NULL)
@@ -434,13 +434,13 @@ map2dCalcServer <- function(id, cman) {
                 polsOverlap <- sf::st_overlaps(pols, fRings)
                 pRet <- list()
                 for (i in seq_along(polsOverlap)) {
-                    pRet[[pols$featId[i]]] <- fRings$path[polsOverlap[[i]]]
+                    pRet[[pols$fid[i]]] <- fRings$path[polsOverlap[[i]]]
                 }
                 lines <- feats[grepl("LINESTRING", feats$ftype, fixed=TRUE), ]
                 lineInt <- sf::st_intersects(lines, fRings)
                 lineRet <- list()
                 for (i in seq_along(lineInt)) {
-                    lineRet[[lines$featId[i]]] <- fRings$path[lineInt[[i]]]
+                    lineRet[[lines$fid[i]]] <- fRings$path[lineInt[[i]]]
                 }
                 selectedPath <- c(polsOverlap, lineInt) |> unlist(use.names = FALSE) |> unique() |> sort()
                 selectedHash1 <- tbl[path %in% fRings$path[selectedPath] & caseName %in% input$cases1, hash]

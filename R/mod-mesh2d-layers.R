@@ -4,7 +4,6 @@ map2dLayerUi <- function(id) {
     ns <- shiny::NS(id)
     shiny::addResourcePath("img", system.file("app/www/img", package="ugrid"))
     tmpFolder <- tempdir()
-    shiny::addResourcePath("raster", tmpFolder)
     bslib::layout_sidebar(
         shinyjs::useShinyjs(),
         sidebar=bslib::sidebar(
@@ -26,15 +25,15 @@ map2dLayerUi <- function(id) {
                         ns("ncNames1"), "NetCDF files / domains", choices="", multiple=TRUE, search=TRUE),
                     bslib::tooltip(
                         shinyWidgets::virtualSelectInput(
-                            ns("feats"), "Features of Interest (to select touching domains)", choices=c(NOK_Achse=1L),
-                            multiple=FALSE, search=TRUE),
+                            ns("feats"), "Features of Interest (to select touching domains)",
+                            choices=NULL, multiple=FALSE, search=TRUE),
                         "To select domains from all project that are touched or intersected with given features.
                         Please select the features from the list"),
                     shinyWidgets::virtualSelectInput(ns("cases1"), "Select case(s)",
                                                      choices="", multiple=TRUE, autoSelectFirstOption=TRUE),
                     shinyWidgets::virtualSelectInput(ns("cases2"), "Select a reference case",
                                                      choices="", multiple=FALSE, autoSelectFirstOption=FALSE),
-                    bslib::input_task_button(ns("findDomains"), "Slice data for the line!"),
+                    bslib::input_task_button(ns("slideData"), "Slice data for the line!"),
                     shiny::hr()
                 ),
                 bslib::accordion_panel(
@@ -70,23 +69,30 @@ map2dLayerUi <- function(id) {
                 )
             )
         ),
-        shiny::fluidRow(
-            shiny::column(4, shiny::div(class="d-grid gap-2", bslib::input_task_button(
-                id=ns("genOverview"), label="Generate domain overview", width='100%'))),
-            shiny::column(4, shiny::div(class="d-grid gap-2", bslib::input_task_button(
-                id=ns("genPlot"), label="Plot data for selected time steps", width='100%'))),
-            shiny::column(4, shiny::div(class="d-grid gap-2", bslib::input_task_button(
-                id=ns("genAnimation"), label="Generate animation for all steps", width='100%')))
-        ),
-        bslib::card(
-            height="75vh", full_screen=TRUE, id=ns("map2d-card"),
-            mapgl::maplibreOutput(ns("map2d"), height="550px")
-        ),
-        bslib::card(
-            height="75vh", full_screen=TRUE, id=ns("map2d-line-plot"),
-            shiny::plotOutput(ns("layerPlot"), height="600px")
-            # shiny::sliderInput(ns("tsIdxAni"), "Slide to view plot for each timestep", min=1L, max=365L,
-            #                    value=1L, step=1L, pre="Timestep ")
+        bslib::accordion(
+            open=c("Data source"), multiple=FALSE,
+            bslib::accordion_panel(
+                title="Graphics", icon=shiny::icon("chart-area"),
+                shiny::fluidRow(
+                    shiny::column(4, shiny::div(class="d-grid gap-2", bslib::input_task_button(
+                        id=ns("genOverview"), label="Generate domain overview", width='100%'))),
+                    shiny::column(4, shiny::div(class="d-grid gap-2", bslib::input_task_button(
+                        id=ns("genPlot"), label="Plot data for selected time steps", width='100%'))),
+                    shiny::column(4, shiny::div(class="d-grid gap-2", bslib::input_task_button(
+                        id=ns("genAnimation"), label="Generate animation for all steps", width='100%')))
+                ),
+                bslib::card(
+                    height="75vh", full_screen=TRUE, id=ns("map2d-card"),
+                    mapgl::maplibreOutput(ns("map2d"), height="550px")
+                ),
+                bslib::card(
+                    height="75vh", full_screen=TRUE, id=ns("map2d-line-plot"),
+                    shiny::plotOutput(ns("layerPlot"), height="600px")
+                )
+            ),
+            bslib::accordion_panel(
+                title="Plot layout", icon=shiny::icon("list-check")
+            )
         )
     )
 }
@@ -98,14 +104,6 @@ map2dLayerServer <- function(id, cman) {
         shinyjs::hide(id="dlMap")
         shinyjs::hide(id="map2d-card")
         shinyjs::hide(id="map2d-line-plot")
-        nokAchse <- sf::st_read(dsn=system.file("geodata.gpkg", package="ugrid"), layer="NOK_river_axis") |>
-            sf::st_transform(4326)
-        nokAchse$fname <- "NOK Achse"
-        nokAchse$fid <- 1L
-        nokAchse$id <- digest::digest(system.file("geodata.gpkg", package="ugrid"))
-        nokAchse <- nokAchse[, c("id", "fid", "fname")]
-        nokAchse <- sf::st_set_geometry(nokAchse, "geometry")
-        gdta <- shiny::reactiveValues(lines=nokAchse)
         map2d <- shiny::reactiveVal()
         layerPlot <- shiny::reactiveVal()
         palTbl <- shiny::reactive({
@@ -177,15 +175,27 @@ map2dLayerServer <- function(id, cman) {
         })
         shiny::observeEvent(input$genOverview, {
             pol <- frings()
+            nokAchse <- sf::st_read(dsn=system.file("geodata.gpkg", package="ugrid"), layer="NOK_river_axis") |>
+                sf::st_set_geometry("geometry") |> sf::st_zm(drop=TRUE)
+            if (!nokAchse$id %in% cman$layer$id)
+                cman$layer <- rbind(cman$layer, nokAchse)
+            lines <- cman$layer[grepl("LINESTRING", cman$layer$ftype), ]
+            pts <- sf::st_centroid(lines)
+            dpols <- cman$layer[grepl("POLYGON", cman$layer$ftype), ]
             map <- mapgl::maplibre(bounds=pol) |>
                 mapgl::add_fill_layer(id="domains", source=pol, tooltip="label",
-                                      hover_options=list(fill_color="yellow", fill_opacity=1),
-                                      fill_color="caseName", fill_opacity=0.5) |>
-                mapgl::add_draw_control(
-                    download_button=TRUE, source="domains")
-            # browser()
-                # if (inherits(gdta$lines, "sf"))
-                #     map <- mapgl::add_line_layer(map, id="lines", source=gdta$lines, tooltip="fname")
+                                      fill_color="#002B54", fill_opacity=0.5
+                                      ) |>
+                mapgl::add_line_layer(id="lines", source=lines,
+                                      line_color="#8E4454", tooltip="fname") |>
+                mapgl::add_symbol_layer(source=pts, id="lines_label", text_field=list("get", "fname")) |>
+                mapgl::add_draw_control(download_button=TRUE)
+            if (nrow(dpols) > 0) {
+                dpts <- sf::st_centroid(dpols)
+                map <- mapgl::add_fill_layer(map, id="dpols", source=dpols, fill_color="#8E4454",
+                                             tooltip="fname", fill_opacity=1) |>
+                    mapgl::add_symbol_layer(source=dpts, id="dpols_label", text_field=list("get", "fname"))
+            }
             map2d(map)
             shinyjs::show(id="map2d-card")
             shinyjs::hide(id="map2d-line-plot")
@@ -197,43 +207,31 @@ map2dLayerServer <- function(id, cman) {
         output$layerPlot <- shiny::renderPlot({
             layerPlot()
         })
-        shiny::observeEvent(input$tsIdxAni, {
-            ncNames1 <- input$ncNames1[nchar(input$ncNames1) > 0]
-            selectedPath <- cman$tbl[hash %in% ncNames1, path]
-            thisHash <- digest::digest(c(sort(selectedPath), input$ncVar1))
-            if (!thisHash %in% names(rasters))
-                return(NULL)
-            legendTitle <- shiny::HTML(
-                paste0(rasters[[thisHash]]$legendTitle, rasters[[thisHash]]$ts[input$tsIdxAni], ")"))
-            ras <- terra::rast(rasters[[thisHash]]$files[input$tsIdxAni])
-            tm <- genRasterTmap(ras, colScale=rasters[[thisHash]]$colScale, legendTitle=legendTitle)
-            map2d(tm)
-        }, ignoreInit = TRUE)
         shiny::observeEvent(input$map2d_drawn_features, {
             mprox <- mapgl::mapboxgl_proxy("map2d")
             feats <- mapgl::get_drawn_features(mprox)
             lines <- feats[is.na(feats$caseName), ]
             lines <- lines[grepl("LINESTRING", sf::st_geometry_type(lines)), ]
-            lines <- lines[!lines$id %in% gdta$lines$id, ]
+            lines <- lines[!lines$id %in% cman$layer$id, ]
             if (nrow(lines) > 0) {
-                startIdx <- ifelse(is(gdta$lines, "sf"), nrow(gdta$lines), 0) + 1
+                lines$ftype <- sf::st_geometry_type(lines)
+                startIdx <- ifelse(is(cman$layer, "sf"), nrow(cman$layer), 0) + 1
                 lines$fname <- paste0("Line_", seq_len(nrow(lines)) + startIdx)
-                lines$fid <- seq_len(nrow(lines)) + startIdx
-                gdta$lines <- rbind(gdta$lines, lines[, c("id", "fid", "fname")])
-                fChoices <- gdta$lines$fid
-                names(fChoices) <- gdta$lines$fname
-                shinyWidgets::updateVirtualSelect(inputId="feats", choices=fChoices, selected=input$feats)
+                lines$id <- seq_len(nrow(lines)) + startIdx
+                cman$layer <- rbind(cman$layer, lines[, c("id", "ftype", "fname")])
+                featChoices <- shinyWidgets::prepare_choices(cman$layer, label=fname, value=id, group_by=ftype)
+                shinyWidgets::updateVirtualSelect(inputId="feats", choices=featChoices, selected=input$feats)
             }
         })
-        shiny::observeEvent(input$findDomains, {
+        shiny::observeEvent(input$slideData, {
             selectedCases <- cman$cases[cman$cases %in% input$cases1]
             if (length(selectedCases) != 1) {
                 shiny::showNotification("Please select only one case first!")
                 return(NULL)
             }
             fRing <- frings()
-            lines <- gdta$lines[input$feats, ]
-            if (sf::st_is_empty(lines)){
+            lines <- cman$layer[cman$layer$id %in% input$feats, ]
+            if (!isTRUE(nrow(lines) > 0)){
                 shiny::showNotification("Please select a line for calculation. Did you upload or draw some?")
                 return(NULL)
             }
@@ -243,9 +241,9 @@ map2dLayerServer <- function(id, cman) {
             # TODO: take more lines
             lineMesh <- lapply(lineRet, function(x) cman$ugrids[[x]])
             if (length(lineMesh) > 0) {
-                lname <- paste(ncVar1, lines$id, sort(input$ncNames1), collapse=";") |>
+                lname <- paste(ncVar1, input$feats, input$cases1, collapse=";") |>
                     digest::digest()
-                if (!inherits(gdta[[lname]], "data.table")) {
+                if (!inherits(cman$lyrInt[[lname]], "data.table")) {
                     lineMesh <- getFaceData4Var(mesh=lineMesh, variable=ncVar1)
                     dta <- sapply(lineMesh, function(x) as.vector(x$data2D$face[[ncVar1]])) |> unlist()
                     aM <- lineMesh[[1]]
@@ -268,7 +266,7 @@ map2dLayerServer <- function(id, cman) {
                     depth <- aM$getData4Any(variable=aM$m2D$layer$altitude, topo="m2D", at="layer")
                     tsName <- aM$ts
                     ldta <- calcIsolineData(depth=depth, station=station, dta=lineDta, tsName=tsName)
-                    gdta[[lname]] <- ldta
+                    cman$lyrInt[[lname]] <- ldta
                     map <- mapgl::maplibre(bounds=lines) |>
                         mapgl::add_fill_layer(source=lineFaces, id="faces", tooltip = "km",
                                               fill_color="grey", fill_opacity=0.5,
@@ -282,34 +280,28 @@ map2dLayerServer <- function(id, cman) {
             }
         })
         shiny::observeEvent(input$genPlot, {
-            selectedCases <- cman$cases[cman$cases %in% input$cases1]
-            selectedHashes <- cman$tbl[hash %in% input$ncNames1, hash]
-            if (length(selectedCases) != 1 | length(selectedHashes) < 1 ) {
-                shiny::showNotification("Please check input for cases and domains!")
-                return(NULL)
-            }
-            meshes <- lapply(selectedHashes, function(x) cman$ugrids[[x]])
             ncVar1 <- input$ncVar1
-            vName <-  meshes[[1]]$getVarName(ncVar1)
-            ncUnit1 <- meshes[[1]]$atts[varName == vName & grepl("unit", name), val]
-            tsName <- meshes[[1]]$ts
-            legendTitle <- paste0(ncVar1, " [", ncUnit1,"]")
-            lines <- gdta$lines[input$feats, ]
-            lname <- paste(ncVar1, lines$id, sort(input$ncNames1), collapse=";") |>
+            lname <- paste(ncVar1, input$feats, input$cases1, collapse=";") |>
                 digest::digest()
-            ldta <- gdta[[lname]]
+            ldta <- cman$lyrInt[[lname]]
             if (!data.table::is.data.table(ldta)) {
                 shiny::showNotification("No data found. Please generate data for the selected parameters first!")
-            } else {
-                shinyjs::hide(id="map2d-card")
-                shinyjs::show(id="map2d-line-plot")
-                g <- genContourFacets(
-                    tbl=ldta, tsIds=tsName[as.integer(input$tsIdx1)],
-                    nClass=input$nClass, style=input$clsStyle, colPal=input$colPal,
-                    fixedClass=input$breaks, legendTitle=legendTitle
-                )
-                layerPlot(g)
+                return(NULL)
             }
+            caseHashes <- cman$tbl[caseName %in% input$cases1 & hash %in% names(cman$ugrids), hash]
+            aM <- cman$ugrids[[caseHashes[1]]]
+            vName <-  aM$getVarName(ncVar1)
+            ncUnit1 <- aM$atts[varName == vName & grepl("unit", name), val]
+            tsName <- aM$ts
+            legendTitle <- paste0(ncVar1, " [", ncUnit1,"]")
+            shinyjs::hide(id="map2d-card")
+            shinyjs::show(id="map2d-line-plot")
+            g <- genContourFacets(
+                tbl=ldta, tsIds=tsName[as.integer(input$tsIdx1)],
+                nClass=input$nClass, style=input$clsStyle, colPal=input$colPal,
+                fixedClass=input$breaks, legendTitle=legendTitle
+            )
+            layerPlot(g)
         })
         shiny::observeEvent(input$cases1, {
             caseHash <- cman$tbl[caseName %in% input$cases1, hash]
@@ -337,6 +329,7 @@ map2dLayerServer <- function(id, cman) {
                 tsIds <- seq.int(1, aM$totalTs, 1)
                 names(tsIds) <- aM$ts
                 shiny::updateSelectizeInput(inputId="tsIdx1", choices=tsIds, server=TRUE, selected=tsIds[2])
+                shiny::updateSliderInput(inputId="tsIdxAni", max=length(tsIds))
             }
             tbl <- rbind(cman$tbl[caseName %in% input$cases1], cman$tbl[!caseName %in% input$cases1])
             ncLst <- shinyWidgets::prepare_choices(tbl, label=ncName,
@@ -397,7 +390,6 @@ map2dLayerServer <- function(id, cman) {
                 )
             progress$set(value=0.9, message="Data is being prepared in background. The download button will be enabled when the preparation is done...")
         })
-
         output$dlMap <- shiny::downloadHandler(
             filename=paste0(input$ncVar1, "_map_data.gpkg"),
             contentType="application/geopackage",
@@ -407,48 +399,3 @@ map2dLayerServer <- function(id, cman) {
         )
     })
 }
-
-nokUiTest <- function(request) {
-    shiny::addResourcePath("www", system.file("app/www", package="ugrid"))
-    shiny::addResourcePath("img", system.file("app/www/img", package="ugrid"))
-
-    bslib::page_navbar(
-        title = div(img(src="img/bfg-logo.png", height = "50px"),
-                    style = "padding-left:150px; padding-right:20px;"),
-        id = "navbar",
-        window_title = "Ergebnisse des Sobek-Modells",
-        selected = "tpLine",
-        theme = bslib::bs_theme(bootswatch="cerulean"),
-        header=shiny::tagList(
-            shinyjs::useShinyjs(),
-            tags$head(
-                tags$link(rel="icon", href="favicon.ico"),
-                tags$style(".navbar-header {height: 50px; min-height:25px; padding:0px; margin:0px;}"),
-                tags$style(".navbar-static-top {margin-bottom: 2px; padding:0px;}"),
-                tags$style(
-                    HTML(notificationStyle)
-                )
-            )
-        ),
-        bslib::nav_panel(
-            title = "Results for Layers", value = "tpLayer",
-            map2dLayerUi("retLayer")
-        )
-    )
-}
-nokServerTest <- function(input, output, session) {
-
-    tmap::tmap_mode("view")
-    # options(shiny.trace="recv")
-    # increasing max filesize to upload to 100Mb
-    options(shiny.maxRequestSize=100*1024^2)
-    options(ugrid.pattern="_map\\.nc$")
-    if (!exists("cman")) {
-        cman <- initCaseManager()
-    }
-    observeEvent(cman$cases, {
-        shinyWidgets::updateVirtualSelect(inputId="retLayer-cases1", choices=cman$cases)
-    })
-    map2dLayerServer("retLayer", cman=cman)
-}
-shiny::shinyApp(ui=nokUiTest, server=nokServerTest, options=list(launch.browser=TRUE))

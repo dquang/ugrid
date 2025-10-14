@@ -192,9 +192,10 @@ genIsoline <- function(x, field, resolution=10, nbin=10,
     return(contours)
 }
 
-poly2Raster <- function(pol, field, resolution=NULL) {
+poly2Raster <- function(pol, field, resolution=NULL, to4326=TRUE) {
 
     if (!inherits(pol, "sf")) {
+        message("pol must be a sf polygon object")
         return(NULL)
     }
     if (!field %in% colnames(pol)) {
@@ -219,7 +220,8 @@ poly2Raster <- function(pol, field, resolution=NULL) {
         x=x,
         y=terra::rast(terra::ext(pol), resolution=resolution, crs=terra::crs(pol)),
         field=field, fun="mean")
-    ret <- terra::project(ret, "epsg:4326")
+    if (to4326)
+        ret <- terra::project(ret, "epsg:4326")
 
     return(ret)
 }

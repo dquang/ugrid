@@ -107,7 +107,8 @@ genContourGif <- function(tbl, fps=12, fname=tempfile(fileext=".gif"), xRange=c(
                           nClass=7, style="kmeans", colPal="blue_teal",
                           fixedClass=NULL,
                           legendTitle="sea_water_salinity [1e-3]") {
-
+    if (identical(fixedClass, ""))
+        fixedClass <- NULL
     yRange <- tbl[, range(y, na.rm=TRUE)]
     if (!rlang::is_bare_numeric(xRange, 2))
         xRange <- tbl[, range(x, na.rm=TRUE)]
@@ -128,12 +129,13 @@ genContourGif <- function(tbl, fps=12, fname=tempfile(fileext=".gif"), xRange=c(
                              error=function(e) message(e))
         brks <- valClass$brks
     }
+    colors <- cols4all::c4a(palette=colPal, n=length(brks), type="seq", nm_invalid="interpolate")
     g <- ggplot2::ggplot(tbl, ggplot2::aes(x = x, y = y, z=z)) +
-        ggplot2::geom_contour_filled(breaks=valClass$brks) +
+        ggplot2::geom_contour_filled(breaks=brks) +
         yaxis +
         xaxis +
         ggplot2::coord_equal() +
-        cols4all::scale_fill_discrete_c4a_cat(palette = colPal) +
+        ggplot2::scale_fill_manual(values=colors,  aesthetics = 'fill', drop=FALSE) +
         ggplot2::labs(x=xName, y=yName,
                       fill=legendTitle, subtitle="Timestep {frame_time}") +
         gganimate::transition_time(tsIdx) +
@@ -150,6 +152,8 @@ genContourFacets <- function(tbl, tsIds, xRange=c(0, 65), xReverse=TRUE,
                           fixedClass=NULL,
                           legendTitle="sea_water_salinity [1e-3]") {
 
+    if (identical(fixedClass, ""))
+        fixedClass <- NULL
     yRange <- tbl[, range(y, na.rm=TRUE)]
     if (!rlang::is_bare_numeric(xRange, 2))
         xRange <- tbl[, range(x, na.rm=TRUE)]
@@ -170,15 +174,17 @@ genContourFacets <- function(tbl, tsIds, xRange=c(0, 65), xReverse=TRUE,
                              error=function(e) message(e))
         brks <- valClass$brks
     }
+    colors <- cols4all::c4a(palette=colPal, n=length(brks), type="seq", nm_invalid="interpolate")
     g <- ggplot2::ggplot(tbl[tsIdx %in% tsIds,], ggplot2::aes(x = x, y = y, z=z)) +
-        ggplot2::geom_contour_filled(breaks=brks) +
+        ggplot2::geom_contour_filled(show.legend = TRUE, breaks=brks) +
         yaxis +
         xaxis +
         ggplot2::coord_equal() +
-        cols4all::scale_fill_discrete_c4a_cat(palette = colPal, breaks=brks) +
+        ggplot2::scale_fill_manual(values=colors,  aesthetics = 'fill', drop=FALSE) +
         ggplot2::labs(x=xName, y=yName, fill=legendTitle) +
         ggplot2::facet_wrap(ggplot2::vars(tsIdx), ncol=1) +
         ggplot2::theme_bw(base_size=14, base_family="Arial")
+
     return(g)
 }
 

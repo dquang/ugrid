@@ -1,4 +1,4 @@
-#' Shiny module for
+#' Shiny module for vector output
 map2dUi <- function(id) {
 
     ns <- shiny::NS(id)
@@ -61,7 +61,7 @@ map2dUi <- function(id) {
                                   )
                         ),
                     shiny::selectizeInput(ns("colSeries"), "Color series", multiple=TRUE,
-                                          choices=cols4all::c4a_series(type="cat", as.data.frame = F),
+                                          choices=cols4all::c4a_series(type=, as.data.frame = FALSE),
                                           selected=c("brewer", "cols4all", "matplotlib", "tableau"))
                 ),
                 bslib::accordion_panel(
@@ -93,10 +93,7 @@ map2dUi <- function(id) {
             shinycssloaders::withSpinner(
                 image="img/working.gif",
                 mapgl::maplibreOutput(ns("map2d"), height="550px"))
-            # shiny::sliderInput(
-            #     inputId=ns("aniTsIdx"), "Animate through all time steps", min=1, max=100, value=1, step=1,
-            #     animate=shiny::animationOptions(interval = 500, playButton = "Play", pauseButton = "Pause"))
-            ),
+        ),
         bslib::card(
             height="75vh", full_screen=TRUE, id=ns("map2d-cmp-card"),
             shinycssloaders::withSpinner(
@@ -139,7 +136,7 @@ map2dServer <- function(id, cman) {
                 shiny::showNotification("Please select a case first!")
                 return(NULL)
             }
-            feats <- cman$layer[cman$layer$featId %in% input$feats, ]
+            feats <- cman$layer[cman$layer$fid %in% input$feats, ]
             if (isTRUE(nrow(feats) < 1)) {
                 shiny::showNotification("Please select at least one feature of interest first!")
                 return(NULL)
@@ -203,13 +200,13 @@ map2dServer <- function(id, cman) {
                 polsOverlap <- sf::st_overlaps(pols, fRings)
                 pRet <- list()
                 for (i in seq_along(polsOverlap)) {
-                    pRet[[pols$featId[i]]] <- fRings$path[polsOverlap[[i]]]
+                    pRet[[pols$fid[i]]] <- fRings$path[polsOverlap[[i]]]
                 }
                 lines <- feats[grepl("LINESTRING", feats$ftype, fixed=TRUE), ]
                 lineInt <- sf::st_intersects(lines, fRings)
                 lineRet <- list()
                 for (i in seq_along(lineInt)) {
-                    lineRet[[lines$featId[i]]] <- fRings$path[lineInt[[i]]]
+                    lineRet[[lines$fid[i]]] <- fRings$path[lineInt[[i]]]
                 }
                 selectedPath <- c(polsOverlap, lineInt) |> unlist(use.names = FALSE) |> unique() |> sort()
                 selectedHash1 <- tbl[path %in% fRings$path[selectedPath] & caseName %in% input$cases1, hash]
@@ -292,7 +289,6 @@ map2dServer <- function(id, cman) {
             }
             ret <- data.table::rbindlist(polLst) |> sf::st_as_sf()
             if (is(ret, "sf")) {
-                browser()
                 res <- sf::st_area(ret[sample.int(nrow(ret), 1), ]) |> sqrt() |> pretty()
                 shiny::updateTextInput(inputId="resolution",
                                        label=paste0("Raster resolution (suggest: ", res[1], ")"))
@@ -669,7 +665,7 @@ map2dServer <- function(id, cman) {
                 shiny::showNotification("Please select a case first!")
                 return(NULL)
             }
-            feats <- cman$layer[cman$layer$featId %in% input$feats, ]
+            feats <- cman$layer[cman$layer$fid %in% input$feats, ]
             if (isTRUE(nrow(feats) < 1) | !inherits(feats, "sf")) {
                 shiny::showNotification("Please select at least one feature of interest first!")
                 return(NULL)
@@ -730,13 +726,13 @@ map2dServer <- function(id, cman) {
                 polsOverlap <- sf::st_overlaps(pols, fRings)
                 pRet <- list()
                 for (i in seq_along(polsOverlap)) {
-                    pRet[[pols$featId[i]]] <- fRings$path[polsOverlap[[i]]]
+                    pRet[[pols$fid[i]]] <- fRings$path[polsOverlap[[i]]]
                 }
                 lines <- feats[grepl("LINESTRING", feats$ftype, fixed=TRUE), ]
                 lineInt <- sf::st_intersects(lines, fRings)
                 lineRet <- list()
                 for (i in seq_along(lineInt)) {
-                    lineRet[[lines$featId[i]]] <- fRings$path[lineInt[[i]]]
+                    lineRet[[lines$fid[i]]] <- fRings$path[lineInt[[i]]]
                 }
                 selectedPath <- c(polsOverlap, lineInt) |> unlist(use.names = FALSE) |> unique() |> sort()
                 if (length(selectedPath) < 1) {

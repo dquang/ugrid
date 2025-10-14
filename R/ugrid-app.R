@@ -12,9 +12,11 @@ notificationStyle <- ".shiny-notification {
 					.selectize-input { word-break: break-word;}
 					.selectize-dropdown {word-wrap : break-word;}
 					 "
+# source: https://stackoverflow.com/questions/46559251/how-to-add-multiple-line-breaks-conveniently-in-shiny
 nBrks <- function(n){shiny::HTML(rep("<br/>", n))}
 
 #' UI function of main shiny app
+#' The structure of the ui and the big-buttons was inspired by this app: https://github.com/voronoys/voronoys_sc
 appUi <- function(request) {
 
     shiny::addResourcePath("www", system.file("app/www", package="ugrid"))
@@ -33,9 +35,7 @@ appUi <- function(request) {
                  tags$link(rel="icon", href="favicon.ico"),
                  tags$style(".navbar-header {height: 50px; min-height:25px; padding:0px; margin:0px;}"),
                  tags$style(".navbar-static-top {margin-bottom: 2px; padding:0px;}"),
-                 tags$style(
-                     HTML(notificationStyle)
-                 )
+                 tags$style(HTML(notificationStyle))
              )
          ),
          uiHome(),
@@ -119,7 +119,7 @@ uiSetting <- function() {
                 shiny::h3("Add case"),
                 shiny::fluidRow(
                     shiny::column(9, shinyWidgets::textInputIcon(
-                        "casePath", "Add a case using format Name=/path/to/folder/on/Z",
+                        "casePath", "Add a case using format Name=/path/to/folder",
                         value=getOption("ugrid.case"), width="100%")),
                     shiny::column(3, shinyWidgets::virtualSelectInput(
                         "caseCrs", "CRS", choices=crsidChoices, multiple=FALSE,
@@ -188,7 +188,6 @@ uiResultLayer <- function() {
 appServer <- function(input, output, session) {
 
     tmap::tmap_mode("view")
-    # options(shiny.trace="recv")
     # increasing max filesize to upload to 100Mb
     options(shiny.maxRequestSize=100*1024^2)
     options(ugrid.pattern="_map\\.nc$")
@@ -236,7 +235,7 @@ appServer <- function(input, output, session) {
             lyr <- tryCatch(sf::st_read(dsn=dsnFile), error=function(e) e)
         }
         if (inherits(lyr, "error")) {
-            shiny::showNotification(paste("Error while reading uploade Shapefile: ", lyr$message))
+            shiny::showNotification(paste("Error while reading uploaded file: ", lyr$message))
         } else if (nrow(lyr) > 0) {
             if (!is.na(sf::st_crs(lyr))) {
                 lyr <- sf::st_transform(lyr, "EPSG:4326")
@@ -255,23 +254,26 @@ appServer <- function(input, output, session) {
             allCols <- colnames(lyr)
             nameColIdx <- grep("name", allCols, ignore.case=TRUE)[1]
             if (!chkInt(nameColIdx))
-                lyr$fname <- paste0(basename(dsnFile), "_fid_", ids)
+                lyr$fname <- paste0(basename(dsnFile), "_", ids)
             else
                 colnames(lyr)[nameColIdx] <- "fname"
-            lyr$featId <- paste0("fid_", ids)
+            lyr$id <- paste0(digest::digest(dsnFile), "_", ids)
             lyr$ftype <- sf::st_geometry_type(lyr, by_geometry=TRUE)
             ftypes <- sf::st_geometry_type(lyr, by_geometry=TRUE)
-            lyr <- lyr[, c("featId", "fname", "ftype")]
+            lyr <- lyr[, c("id", "fname", "ftype")]
             if (is(cman$layer, "sf"))
                 lyr <- sf::st_set_geometry(lyr, attr(cman$layer, "sf_column"))
+            lyr <- sf::st_zm(lyr, drop=TRUE)
             cman$layer <- rbind(lyr, cman$layer)
         }
     })
     observeEvent(cman$layer, {
         if (is(cman$layer, "sf")) {
-            featChoices <- shinyWidgets::prepare_choices(cman$layer, label=fname, value=featId, group_by=ftype)
+            featChoices <- shinyWidgets::prepare_choices(cman$layer, label=fname, value=id, group_by=ftype)
             shinyWidgets::updateVirtualSelect(inputId="retMap-feats", choices=featChoices)
             shinyWidgets::updateVirtualSelect(inputId="raster-feats", choices=featChoices)
+            shinyWidgets::updateVirtualSelect(inputId="retLayer-feats", choices=featChoices)
+            shinyWidgets::updateVirtualSelect(inputId="retLine-feats", choices=featChoices)
         }
     })
     observeEvent(input$addCase, {
