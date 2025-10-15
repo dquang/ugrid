@@ -24,7 +24,7 @@
 genMeta <- function(
         fid, pid, uri=NULL, time=Sys.time(), title="Dataset",
         name=NA, org="BfG", position=NA,
-        phone="+4926113060", email="posteingang@bafg.de",
+        phone="+4926113060", email="posteingang@bafg.de", homepage="http://www.bafg.de",
         street="Am Mainzer Tor 1", city="Koblenz", postcode=56068,
         crsCode="", crsCodeSpace="EPSG",
         abstract=NA, purpose=NA, credits=NULL,
@@ -66,7 +66,7 @@ genMeta <- function(
     address$setEmail(email)
     contact$setAddress(address)
     res <- geometa::ISOOnlineResource$new()
-    res$setLinkage("http://www.bafg.de")
+    res$setLinkage(homepage)
     res$setName("Homepage")
     contact$setOnlineResource(res)
     rp$setContactInfo(contact)

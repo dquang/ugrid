@@ -6,6 +6,7 @@
 #' @param pattern Search pattern for Ugrid-NetCDF files.
 #' @import RNetCDF
 #' @import data.table
+#' @keywords internal
 genDomainBbox <- function(path, pattern=getOption("ugrid.pattern")) {
 
     if (!chkChr(pattern))
@@ -45,6 +46,7 @@ genDomainBbox <- function(path, pattern=getOption("ugrid.pattern")) {
     return(ret)
 }
 
+#' @keywords internal
 genDomainPolygons <- function(meshes) {
 
     if (is(meshes, "list"))

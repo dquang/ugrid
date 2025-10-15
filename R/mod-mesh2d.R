@@ -1,4 +1,5 @@
-#' Shiny module for vector output
+#' Shiny module for output as vectors
+#' @keywords internal
 map2dUi <- function(id) {
 
     ns <- shiny::NS(id)
@@ -116,6 +117,7 @@ map2dUi <- function(id) {
     )
 }
 
+#' @keywords internal
 map2dServer <- function(id, cman) {
     shiny::moduleServer(id=id, function(input, output, session) {
         shinyjs::hide(id="lyr")

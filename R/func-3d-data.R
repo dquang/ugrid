@@ -4,7 +4,7 @@
 #' @param variable Character. Name of variable
 #' @param mesh an object of class `Ugrid`
 #' @export
-verticalData <- function(x, variable, mesh, force = FALSE, ...) {
+getVerticalData <- function(x, variable, mesh, force = FALSE, ...) {
 
     chkLayer <- mesh$hasLayerData(variable=variable)
     if (!chkLayer) {

@@ -8,6 +8,7 @@
 #' @param force If TRUE, the data stored in Ugrid object, if any, will be read again.
 #' @param onlyMain If TRUE, the cell elements of other domains will be removed.
 #' @returns A sf object.
+#' @keywords internal
 getMapData <- function(mesh, variable, lyr=1L, tsIdx=1L, agg="none", onlyMain=FALSE) {
 
     if (!is(mesh, "list"))
@@ -42,6 +43,7 @@ getMapData <- function(mesh, variable, lyr=1L, tsIdx=1L, agg="none", onlyMain=FA
 #' @param force If TRUE, the data stored in Ugrid object, if any, will be read again.
 #' @param onlyMain If TRUE, the cell elements of other domains will be removed.
 #' @returns A sf object.
+#' @keywords internal
 raster4Meshes <- function(mesh, variable, tsIdx=1L, agg="none", lyr=1L,
                        force=FALSE, onlyMain=FALSE) {
     if (!is(mesh, "list"))
@@ -159,6 +161,7 @@ getFaceData4Var <- function(mesh, variable, lyr="all") {
 #' @param binWidth Bin-width, if given, nbin will be ignored.
 #' @param asSf If TRUE, the generated raster will be converted to sf.
 #' @return a SpatVector or sf LINESTRING vector object.
+#' @export
 genIsoline <- function(x, field, resolution=10, nbin=10,
                        binWidth=NULL, asSf=TRUE) {
 
@@ -192,6 +195,7 @@ genIsoline <- function(x, field, resolution=10, nbin=10,
     return(contours)
 }
 
+#' @keywords internal
 poly2Raster <- function(pol, field, resolution=NULL, to4326=TRUE) {
 
     if (!inherits(pol, "sf")) {
@@ -230,6 +234,7 @@ poly2Raster <- function(pol, field, resolution=NULL, to4326=TRUE) {
 #'
 #' @param fromBb Origin bbox
 #' @param toBb Destination bbox
+#' @keywords internal
 rescale <- function(fromBb,
                     toBb=c(-37, -44, -16, -30)
 ){
@@ -244,6 +249,7 @@ rescale <- function(fromBb,
     return(list(fx=fx, fy=fy, fd=fd))
 }
 
+#' @keywords internal
 rescale2 <- function(x, toBb=c(-37, -44, -16, -30)){
 
     chk <- inherits(x, "sf") | inherits(x, "SpatRaster") | inherits(x, "SpatVector")
@@ -279,6 +285,7 @@ rescale2 <- function(x, toBb=c(-37, -44, -16, -30)){
 #' @param geom a sf object.
 #' @param toBb destination bbox.
 #' @param rsf a list of rescaling functions returned from `rescale` function.
+#' @keywords internal
 squash2Bbox <- function(geom, toBb=c(-37, -44, -16, -30), rsf=NULL) {
 
     if (!all(is.function(rsf))) {
@@ -324,6 +331,7 @@ squash2Bbox <- function(geom, toBb=c(-37, -44, -16, -30), rsf=NULL) {
 #' @param aOpen Open angle in degree of vector head.
 #' @param aSide Vector head to both side or only one?
 #' @param fillValue The fill value of the variable in the NetCDF.
+#' @export
 genVectorLayer <- function(
         x, tsIdx=NULL, lyr=1L, onlyMain=FALSE,
         baseLength=NULL, aRatio = 0.2, aOpen=30, aSide=2,
@@ -362,7 +370,7 @@ genVectorLayer <- function(
             sqrt() |> as.numeric()
     }
     vecBeginPts <- data.table::data.table(X=faceX, Y=faceY, L=ucmag * baseLength, duX=ucx, duY=ucy)
-    vecBeginPts[, A  := mapply(getDirection, duX, duY,
+    vecBeginPts[, A  := mapply(calcDirection, duX, duY,
                                MoreArgs=list(fillValue=fillValue), USE.NAMES = FALSE)]
     vecBeginPts <- vecBeginPts[A != fillValue]
     vecEndPts <- data.table::copy(vecBeginPts)
@@ -403,6 +411,7 @@ genVectorLayer <- function(
     return(ret)
 }
 
+#' @keywords internal
 genVector4All <- function(
         mesh, lyr=1L, baseLength=NULL, aRatio = 0.2, aOpen=30, aSide=2,
         fillValue=NULL) {
@@ -448,11 +457,12 @@ genVector4All <- function(
     return(retLst)
 }
 
+#' @keywords internal
 genVector4One <- function(faceX, faceY, ucmag, ucx, ucy, baseLength, aRatio=0.2, aOpen=30, aSide=2,
                           crs=NA, newCrs=NA, tf=FALSE, fillValue=NULL) {
 
     vecBeginPts <- data.table::data.table(X=faceX, Y=faceY, L=ucmag * baseLength, duX=ucx, duY=ucy)
-    vecBeginPts[, A  := mapply(getDirection, duX, duY,
+    vecBeginPts[, A  := mapply(calcDirection, duX, duY,
                                MoreArgs=list(fillValue=fillValue), USE.NAMES = FALSE)]
     vecBeginPts <- vecBeginPts[A != fillValue]
     vecEndPts <- data.table::copy(vecBeginPts)
@@ -493,7 +503,8 @@ genVector4One <- function(faceX, faceY, ucmag, ucx, ucy, baseLength, aRatio=0.2,
     return(ret)
 }
 
-getDirection <- function(dx, dy, fillValue=-999.0) {
+#' @keywords internal
+calcDirection <- function(dx, dy, fillValue=-999.0) {
 
     chk <- isTRUE(dx == fillValue) | isTRUE(dy == fillValue) | !chkDbl(dx) | !chkDbl(dy)
     if (chk)
@@ -510,6 +521,7 @@ getDirection <- function(dx, dy, fillValue=-999.0) {
 
 #' Split features of a linestring to segments with exact two points.
 #' @param x an sf_linestring
+#' @keywords internal
 line2Segments <- function(x) {
 
     if (!is(x, "sf"))
@@ -540,89 +552,6 @@ line2Segments <- function(x) {
 
     return(ret)
 }
-
-# calcDischarge <- function(cr, mnc,
-#                           vxVar="ucxq_velocity", vyVar="ucyq_velocity",
-#                           wdVar="sea_floor_depth_below_sea_surface"){
-#
-#     cri <- sf::st_intersection(cr, mnc$m2D$face2D)
-#     cri <- line2Segments(cri)
-#     fids <- cri$faceID
-#     ucx <- mnc$getData4Face2D(mnc$m2D$face[[vxVar]])
-#     ucy <- mnc$getData4Face2D(mnc$m2D$face[[vyVar]])
-#     if (chkChr(mnc$m2D$face[[wdVar]]) ) {
-#         wd <- mnc$getData4Face2D(mnc$m2D$face[[wdVar]])
-#     } else {
-#         wt <- mnc$getData4Face2D(mnc$m2D$face$sea_surface_height)
-#         bl <- mnc$getData4Face2D(mnc$m2D$face$altitude)
-#         if (mnc$vars[name == mnc$m2D$face$altitude, !hasTime])
-#             bl <- as.vector(bl)
-#         wd <- wt - bl
-#     }
-#     fdta <- data.table::data.table(
-#         faceID=fids, vx=as.vector(ucx[fids, ]), vy=as.vector(ucy[fids, ]),
-#         depth=as.vector(wd[fids, ]))
-#     segLen <- sf::st_length(cri) |> as.vector()
-#     segXY <- sf::st_coordinates(cri) |> data.table::as.data.table()
-#     beginPts <- segXY[seq.int(1, nrow(segXY), 2), ]
-#     colnames(beginPts)[1:2] <- c("x1", "y1")
-#     endPts <- segXY[seq.int(2, nrow(segXY), 2), ]
-#     colnames(endPts)[1:2] <- c("x2", "y2")
-#     endPts$L1 <- NULL
-#     segXY <- cbind(beginPts, endPts)
-#     segXY[, sx := x2 - x1][, sy := y2 - y1][, su := sqrt(sx^2 + sy^2)]
-#     sdta <- segXY
-#     for (i in 1:(mnc$totalTs - 1))
-#         sdta <- rbind(sdta, segXY)
-#     qtbl <- cbind(fdta, sdta)
-#     # qtbl[, vp := vPerp(vx, vy, sx, sy), by=.I]
-#     # qtbl[, crq := vp * depth * su]
-#     # velocity magnitude
-#     qtbl[, vu := sqrt(vx^2 + vy^2)]
-#     qtbl[su < 1e-12, vq := 0]
-#     qtbl[su > 1e-12, ny := sy / su][su > 1e-9, nx := -sx / su]
-#     qtbl[su > 1e-12, vq := vx * ny + vy * nx]
-#     qtbl[vu < 1e-12, crq := 0]
-#     qtbl[vu > 1e-12, crq := vq * su * depth]
-#     ret <- matrix(qtbl$crq, ncol=mnc$totalTs)
-#     ret <- colSums(ret)
-#     return(ret)
-# }
-#
-# vPerp <- function(vx, vy, sx, sy) {
-#
-#     v <- c(vx, vy)
-#     s <- c(sx, sy)
-#     # dot product, sigma(vi.si)
-#     dotp <- vx * sx + vy * sy
-#     su <- sqrt(sx^2 + sy^2)
-#     if (su < 1e-12)
-#         return(0)
-#     v_parallel <- dotp / su
-#     v_perp <- v - v_parallel
-#     vpu <- sqrt(sum(v_perp * v_perp))
-#     if (vpu < 1e-12)
-#         return(0)
-#     # Compute signed angle using atan2 (radians)
-#     crossp <- vx*sy - vy*sx
-#     theta <- atan2(crossp, dotp)        # radians, range (-pi, pi]
-#     if (theta < 0)
-#         theta <- theta + 2*pi    # normalize to [0, 2*pi)
-#
-#     # Determine direction factor
-#     if (theta < 1e-12 || abs(theta - pi) < 1e-12 || abs(theta - 2*pi) < 1e-12) {
-#         d <- 0
-#     } else if (theta > 0 && theta < pi) {
-#         d <- -1
-#     } else {  # pi < theta < 2*pi
-#         d <- 1
-#     }
-#     ret <- vpu * d
-#
-#     return(ret)
-# }
-
-
 
 #' Generate value rasters of one variable for all time steps
 #'

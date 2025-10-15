@@ -449,8 +449,10 @@ Ugrid <- R6::R6Class(
         #' @param variable Variable name for the data
         #' @param tsIdx Time index
         #' @param agg Option for aggregating the data by rows. The aggregation functions come from `matrixStats` package.
+        #' @param lyr Index of the layer to get data.
         #' @param force If TRUE, the data stored in Ugrid object, if any, will be read again.
         #' @param onlyMain If TRUE, the cell elements of other domains will be removed.
+        #' @param dryAsNa If TRUE (default), values for dried (waterlevel - elevation < 0) cells will be assigned NaN.
         getData4Polygon = function(variable, tsIdx=1L, agg="none", lyr=1L,
                                    force=FALSE, onlyMain=FALSE, dryAsNa=TRUE) {
 
