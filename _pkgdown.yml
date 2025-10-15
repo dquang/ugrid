@@ -1,0 +1,53 @@
+home:
+  title: An R package for processing NetCDF files following the UGRID convention.
+  description: An R package for post-processing model outputs stored in NetCDF files following the UGRID convention.
+    While it is primarily designed to handle results from Delft3D-FM, it can be used with any UGRID-compliant NetCDF dataset.
+    The data are encapsulated in an R6 object, where the 2D mesh is represented as a polygon layer,
+    enabling seamless integration with additional post-processing functions included in the package.
+    For users who prefer a graphical interface, the package also provides a Shiny application
+    that brings together the most important functionalities.
+    This allows convenient data exploration and processing without requiring prior knowledge of R programming.
+    Processed data can also be directly downloaded from within the app.
+author: "Quang Duong"
+template:
+  bootstrap: 5
+  light-switch: true
+  bslib:
+    base_font: {google: "Inter"}
+    heading_font: {google: "Roboto Slab"}
+    code_font: {google: "JetBrains Mono"}
+reference:
+- title: "Ugrid object"
+  desc: >
+    R6-Ugrid object wrapping NetCDF data that follows Ugrid-Convention
+  contents:
+  - Ugrid
+- title: "Reading data"
+  desc: "Functions for reading model output."
+  contents:
+  - starts_with("get")
+- title: "Generating geodata"
+  desc: "Functions for generating vector / raster for model output."
+  contents:
+  - starts_with("gen")
+- title: "Read Deltares-format data."
+  desc: "Functions reading some Deltares-format data."
+  contents:
+  - starts_with("read")
+- title: "Shiny app"
+  desc: "Functions for creating shiny modules / inputs."
+  contents:
+  - ugridApp
+  - matches("Ui")
+  - matches("Server")
+  - matches("Input")
+- title: "Utilities"
+  desc: "Utility functions."
+  contents:
+  - asPOSIXctManyFormats
+  - createAxisLayout
+  - createY2
+  - displayColors
+  - findFaces
+  - xy2station
+

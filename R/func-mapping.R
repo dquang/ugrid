@@ -182,6 +182,18 @@ genRasterMap <- function(
     return(ret)
 }
 
+#' Generate animation GIF of tmap from list of rasters
+#'
+#' @param rasLst List of raster files.
+#' @param fname Output file name.
+#' @param rNames Names of raster layers.
+#' @param legendTitle Title for map legend.
+#' @param n Number of color classes.
+#' @param style Style for color classification.
+#' @param colPal Color palette name.
+#' @param colType Color type.
+#' @param reverse Should color palette be reversed?
+#' @export
 genTmapAni <- function(rasLst, fname=tempfile(fileext=".gif"),
                        rNames=NULL, legendTitle="Value", n=5, style="kmeans",
                        colPal="seaborn.bright", colType="seq", reverse=FALSE){
@@ -216,6 +228,7 @@ genTmapAni <- function(rasLst, fname=tempfile(fileext=".gif"),
     return(fname)
 }
 
+#' @keywords internal
 genTmapRasterOutput <- function(pol, field, resolution=NULL, values=NULL, n=5, style="kmeans",
                                 legendTitle="Value", zindex=401,
                                 colPal="seaborn.bright", colType="seq", reverse=FALSE) {
@@ -257,6 +270,7 @@ genTmapRasterOutput <- function(pol, field, resolution=NULL, values=NULL, n=5, s
     return(tm)
 }
 
+#' @keywords internal
 genRasterTmap <- function(ras, colScale, legendTitle, zindex=401) {
 
     if (!inherits(ras, "SpatRaster"))
@@ -282,6 +296,7 @@ genRasterTmap <- function(ras, colScale, legendTitle, zindex=401) {
 #' @param colPal Full name of a color palette.
 #' @param colType Type of palette: "cat", "seq", "div" or "cyc".
 #' @param reverse Should the palette be reversed?
+#' @export
 genTmapColor <- function(
         values=NA, n=5, style="kmeans",
         colPal="seaborn.bright", colType="seq", reverse=FALSE
@@ -314,6 +329,7 @@ genTmapColor <- function(
 #' @param colType Type of palette: "cat", "seq", "div" or "cyc".
 #' @param reverse Should the palette be reversed?
 #' @param opacity Legend opacity
+#' @export
 genColorInfo <- function(
         values=NA, pol=NULL, field=NULL, n=5, style="kmeans", valClass=NULL,
         colPal="seaborn.bright", colType="cat", reverse=FALSE, opacity=1.0

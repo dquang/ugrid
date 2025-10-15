@@ -1,4 +1,5 @@
-#' Shiny module for
+#' Shiny module for output as rasters.
+#' @keywords internal
 map2dLayerUi <- function(id) {
 
     ns <- shiny::NS(id)
@@ -97,6 +98,7 @@ map2dLayerUi <- function(id) {
     )
 }
 
+#' @keywords internal
 map2dLayerServer <- function(id, cman) {
 
     shiny::moduleServer(id=id, function(input, output, session) {

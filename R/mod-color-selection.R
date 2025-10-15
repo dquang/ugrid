@@ -1,4 +1,4 @@
-#' Shiny module for overviewing generating color palettes
+#' Shiny module for overview color palettes
 #'
 #' This module is based on the source code of `cols4all::c4a_gui`
 #' @rdname color-selection

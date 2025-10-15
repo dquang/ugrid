@@ -100,8 +100,9 @@ getAllAtts <- function(nc) {
     return(varAtts)
 }
 
-# Quick check if a NetCDF file follows UGRID convention
-# by checking UGRID keyword in global attributes.
+#' Quick check if a NetCDF file follows UGRID convention
+#' by checking UGRID keyword in global attributes.
+#' @keywords internal
 isUgridNc <- function(nc) {
 
     toClose <- FALSE
@@ -123,7 +124,8 @@ isUgridNc <- function(nc) {
     return(ret)
 }
 
-# List all Ugrid NetCDF files in a folder
+#' List all Ugrid NetCDF files in a folder
+#' @keywords internal
 listUgirdNc <- function(path, pattern=getOption("ugrid.pattern")) {
 
     if (!chkChr(pattern))
@@ -137,6 +139,7 @@ listUgirdNc <- function(path, pattern=getOption("ugrid.pattern")) {
 }
 
 #' R6Class for managing simulations
+#' @keywords internal
 CaseManager <- R6::R6Class(
     "CaseManager",
     public = list(
@@ -289,6 +292,7 @@ CaseManager <- R6::R6Class(
     )
 )
 
+#' @keywords internal
 addCases <- function(caseLst, cman, pattern=getOption("ugrid.pattern"),
                      crs=NA_character_, newCrs=NA_character_,
                      ignoreCrsInFile=FALSE, initUgrid=FALSE) {
@@ -398,6 +402,7 @@ addUgrid <- function(path, cman, overwrite=FALSE) {
     invisible(cman$ugrids[[thisHash]])
 }
 
+#' @keywords internal
 getUgrid <- function(id, cman) {
 
     if (!rlang::is_scalar_character(id)) {
@@ -417,7 +422,7 @@ getUgrid <- function(id, cman) {
     return(ret)
 }
 
-
+#' @keywords internal
 initCaseManager <- function(
         caseLst=NULL, pattern=getOption("ugrid.pattern"),
         crs=NA_character_, newCrs=NA_character_,

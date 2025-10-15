@@ -1,6 +1,7 @@
 #' Future Manager
 #'
 #' A class to manage future calls.
+#' @keywords internal
 FM <- R6::R6Class(
     "FM",
     public=list(

@@ -1,4 +1,4 @@
-
+#' @keywords internal
 fmtDe <- function(rdg, nsmall) {
     function(x) {
         format(round(x, rdg), decimal.mark=",", big.mark=".", nsmall=nsmall)
@@ -11,7 +11,8 @@ fmtDe <- function(rdg, nsmall) {
 #' The input can have different formats, including german date-time format
 #' @param x character vector
 #' @param tz Time zone
-#' @export
+#' @param origin Origin of the time series.
+#' @keywords internal
 asPOSIXctManyFormats <- function(
     x, origin=NULL,
     tz=getOption("rtcio.timeZone"), ...) {
@@ -46,7 +47,7 @@ asPOSIXctManyFormats <- function(
 #'
 #' @param val Named vector colors
 #' @export
-displayColors <- function(val=colBrightLines) {
+displayColors <- function(val) {
     valID <- seq_along(val)
     if (all(is.null(names(val))))
         names(val) <- val
@@ -73,9 +74,9 @@ displayColors <- function(val=colBrightLines) {
 
 #' Create axis list for plotly layout
 #'
-#' @param y1Range,y2Range Ranges of y1, y2 values
-#' @param y1Name,y2Name Names of y1, y2 axes
-#' @param nTick number of ticks
+#' @param y1Range,y2Range Ranges of y1, y2 values.
+#' @param y1Name,y2Name Names of y1, y2 axes.
+#' @param nTick Number of ticks.
 #' @returns List of axis-parameters to pass to `plotly::layout` function
 #' @export
 createAxisLayout <- function(y1Range, y2Range=NULL,
@@ -157,6 +158,7 @@ createY2 <- function(y1, y2, n=5, rel = 1) {
     return(ret)
 }
 
+#' @keywords internal
 blankPlotly <- function(e="Error while creating plot") {
 
     p <- plotly::plot_ly() |>
@@ -170,6 +172,7 @@ blankPlotly <- function(e="Error while creating plot") {
     return(p)
 }
 
+#' @keywords internal
 blankGgplot <- function(e="Error while creating plot") {
 
     g <- ggplot2::ggplot(
@@ -182,7 +185,7 @@ blankGgplot <- function(e="Error while creating plot") {
     return(g)
 }
 
-
+#' @keywords internal
 txt2NumVec <- function(x) {
 
     ret <- stringi::stri_replace_all_fixed(x, ",", ".") |>

@@ -2,7 +2,6 @@
 dev
 docs
 man
-*Rproj
 .Rhistory
 .Rbuildignore
 NAMESPACE

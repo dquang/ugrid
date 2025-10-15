@@ -1,4 +1,5 @@
 #' Shiny module for raster output
+#' @keywords internal
 map2dCalcUi <- function(id) {
 
     ns <- shiny::NS(id)
@@ -107,6 +108,7 @@ map2dCalcUi <- function(id) {
     )
 }
 
+#' @keywords internal
 map2dCalcServer <- function(id, cman) {
 
     shiny::moduleServer(id=id, function(input, output, session) {

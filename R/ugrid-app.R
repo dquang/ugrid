@@ -17,6 +17,7 @@ nBrks <- function(n){shiny::HTML(rep("<br/>", n))}
 
 #' UI function of main shiny app
 #' The structure of the ui and the big-buttons was inspired by this app: https://github.com/voronoys/voronoys_sc
+#' @keywords internal
 appUi <- function(request) {
 
     shiny::addResourcePath("www", system.file("app/www", package="ugrid"))

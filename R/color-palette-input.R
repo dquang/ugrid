@@ -2,6 +2,7 @@
 #' @param filters Filter apply to table of palettes. Possible values are:
 #' `cbf` for colorblind-friendly, `fair` for fairness, `crW` for sufficient contrast ratio with white
 #' `crB` for sufficient contrast ratio with  black.
+#' @keywords internal
 getC4aTable <- function(
     type=c("all", "cat", "seq", "div", "cyc"),
     n=NULL, m=NULL, sort="name", series="all",
@@ -51,6 +52,7 @@ getC4aTable <- function(
 #' @param continuous Logical value for displaying the colors as a color gradient
 #' @param width Width of color blocks
 #' @param minWidth,maxWidth Minimum and maximum widths of the color gradient
+#' @keywords internal
 genPaletteContent <- function(
         palTbl, continuous=FALSE, reverse=FALSE,
         width="2em", minWidth="20em", maxWidth="40em") {
