@@ -44,4 +44,16 @@ Imports:
     shinyjs,
     shinyWidgets,
     stringi,
-    terra
+    terra, 
+    leaflet, 
+    leaflet.providers, 
+    leaflet.extras,
+    stars,
+    openxlsx, 
+    geometa,
+    foreach,
+    doParallel, 
+    gstat, 
+    viridis, 
+    future, 
+    tmap
