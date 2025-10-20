@@ -1,5 +1,4 @@
 #' Shiny module for output as rasters.
-#' @keywords internal
 map2dLayerUi <- function(id) {
 
     ns <- shiny::NS(id)
@@ -8,14 +7,15 @@ map2dLayerUi <- function(id) {
     bslib::layout_sidebar(
         shinyjs::useShinyjs(),
         sidebar=bslib::sidebar(
-            id=ns("map2d-sb"), width="25%",
+            id=ns("map2
+                  d-sb"), width="25%",
             bslib::accordion(
                 open=c("Data source"), multiple=FALSE,
                 bslib::accordion_panel(
                     title="Data source", icon=shiny::icon("folder-open"),
-                    shiny::sliderInput(ns("lyr"), "Select a layer", min=1L, max=10L,
-                                       value=1L, step=1L, pre="Layer "),
                     shiny::p("To update the values for variables and time step, please select a case below."),
+                    shinyWidgets::virtualSelectInput(ns("cases1"), "Select case(s)",
+                                                     choices="", multiple=TRUE, autoSelectFirstOption=TRUE),
                     shiny::hr(),
                     shiny::h4("First raster parameters"),
                     shiny::selectInput(ns("ncVar1"), "Variable", choices=""),
@@ -30,10 +30,6 @@ map2dLayerUi <- function(id) {
                             choices=NULL, multiple=FALSE, search=TRUE),
                         "To select domains from all project that are touched or intersected with given features.
                         Please select the features from the list"),
-                    shinyWidgets::virtualSelectInput(ns("cases1"), "Select case(s)",
-                                                     choices="", multiple=TRUE, autoSelectFirstOption=TRUE),
-                    shinyWidgets::virtualSelectInput(ns("cases2"), "Select a reference case",
-                                                     choices="", multiple=FALSE, autoSelectFirstOption=FALSE),
                     bslib::input_task_button(ns("slideData"), "Slice data for the line!"),
                     shiny::hr()
                 ),
@@ -62,11 +58,6 @@ map2dLayerUi <- function(id) {
                     shiny::selectizeInput(ns("colSeries"), "Color series", multiple=TRUE,
                                           choices=cols4all::c4a_series(type="cat", as.data.frame = F),
                                           selected=c("brewer", "cols4all", "matplotlib", "tableau"))
-                ),
-                bslib::accordion_panel(
-                    title="Export data", icon=shiny::icon("file-export"),
-                    shiny::actionButton(ns("prepDl"), "Prepare data for downloading...", disabled=TRUE),
-                    shiny::downloadButton(ns("dlMap"), "Download map data!", disabled=TRUE)
                 )
             )
         ),
@@ -90,15 +81,11 @@ map2dLayerUi <- function(id) {
                     height="75vh", full_screen=TRUE, id=ns("map2d-line-plot"),
                     shiny::plotOutput(ns("layerPlot"), height="600px")
                 )
-            ),
-            bslib::accordion_panel(
-                title="Plot layout", icon=shiny::icon("list-check")
             )
         )
     )
 }
 
-#' @keywords internal
 map2dLayerServer <- function(id, cman) {
 
     shiny::moduleServer(id=id, function(input, output, session) {
@@ -119,25 +106,6 @@ map2dLayerServer <- function(id, cman) {
                 inputId="colPal", reverse=input$colReverse, continuous=input$continuous,
                 selected=input$colPal, palTbl=palTbl())
         })
-        mapData1 <- shiny::reactive({
-            ncNames1 <- input$ncNames1[nchar(input$ncNames1) > 0]
-            agg1 <- input$agg1
-            tsIdx1 <- ifelse(input$agg1 == "none", input$tsIdx1, -1L)
-            ncVar1 <- input$ncVar1
-            selectedMeshes <- lapply(cman$tbl[hash %in% ncNames1, path], addUgrid, cman=cman)
-            if (length(selectedMeshes) < 1)
-                return(NULL)
-            meshLst <- getMapData(mesh=selectedMeshes, variable=ncVar1, tsIdx=tsIdx1, agg=agg1)
-            polLst <- list()
-            for (i in seq_along(meshLst)) {
-                polLst[[i]] <- data.table::data.table(meshLst[[i]]$ret)
-                meshLst[[i]]$ret <- NULL
-                thisHash <- cman$tbl[path == meshLst[[i]]$path, hash]
-                cman$ugrids[[thisHash]] <- meshLst[[i]]
-            }
-            ret <- sf::st_as_sf(data.table::rbindlist(polLst))
-            return(ret)
-        })
         frings <- shiny::reactive({
             selectedCases <- cman$cases[cman$cases %in% input$cases1]
             if (length(selectedCases) < 1) {
@@ -151,12 +119,10 @@ map2dLayerServer <- function(id, cman) {
             tbl <- data.table::copy(cman$tbl)
             nDomains <- length(toBuildPoly)
             if (nDomains > 0) {
-                shiny::withProgress({
-                    lapply(toBuildPoly, function(aH) {
-                        aM <- addUgrid(tbl[hash==aH, path], cman)
-                        aM$buildFace2DPoly()
-                    })
-                }, message="Building domain polygons...")
+                lapply(toBuildPoly, function(aH) {
+                    aM <- addUgrid(tbl[hash==aH, path], cman)
+                    aM$buildFace2DPoly()
+                })
             }
             polLst <- lapply(hashes, function(x) {
                 ring <- cman$ugrids[[x]]$m2D$fRing
@@ -177,10 +143,6 @@ map2dLayerServer <- function(id, cman) {
         })
         shiny::observeEvent(input$genOverview, {
             pol <- frings()
-            nokAchse <- sf::st_read(dsn=system.file("geodata.gpkg", package="ugrid"), layer="NOK_river_axis") |>
-                sf::st_set_geometry("geometry") |> sf::st_zm(drop=TRUE)
-            if (!nokAchse$id %in% cman$layer$id)
-                cman$layer <- rbind(cman$layer, nokAchse)
             lines <- cman$layer[grepl("LINESTRING", cman$layer$ftype), ]
             pts <- sf::st_centroid(lines)
             dpols <- cman$layer[grepl("POLYGON", cman$layer$ftype), ]
@@ -226,17 +188,21 @@ map2dLayerServer <- function(id, cman) {
             }
         })
         shiny::observeEvent(input$slideData, {
+            progress <- shiny::Progress$new()
+            on.exit(progress$close())
             selectedCases <- cman$cases[cman$cases %in% input$cases1]
             if (length(selectedCases) != 1) {
                 shiny::showNotification("Please select only one case first!")
                 return(NULL)
             }
-            fRing <- frings()
             lines <- cman$layer[cman$layer$id %in% input$feats, ]
             if (!isTRUE(nrow(lines) > 0)){
                 shiny::showNotification("Please select a line for calculation. Did you upload or draw some?")
                 return(NULL)
             }
+            progress$set(value=0.3, message="Getting domain polygons...")
+            fRing <- frings()
+            progress$set(value=0.4, message="Calculating intersections...")
             lineInt <- sf::st_intersects(lines, fRing)
             lineRet <- lapply(seq_along(lineInt), function(i) fRing$hash[lineInt[[i]]]) |> unlist()
             ncVar1 <- input$ncVar1
@@ -246,6 +212,7 @@ map2dLayerServer <- function(id, cman) {
                 lname <- paste(ncVar1, input$feats, input$cases1, collapse=";") |>
                     digest::digest()
                 if (!inherits(cman$lyrInt[[lname]], "data.table")) {
+                    progress$set(value=0.6, message="Reading data...")
                     lineMesh <- getFaceData4Var(mesh=lineMesh, variable=ncVar1)
                     dta <- sapply(lineMesh, function(x) as.vector(x$data2D$face[[ncVar1]])) |> unlist()
                     aM <- lineMesh[[1]]
@@ -267,6 +234,7 @@ map2dLayerServer <- function(id, cman) {
                     lineFaces$km <- station
                     depth <- aM$getData4Any(variable=aM$m2D$layer$altitude, topo="m2D", at="layer")
                     tsName <- aM$ts
+                    progress$set(value=0.7, message="Interpolating data...")
                     ldta <- calcIsolineData(depth=depth, station=station, dta=lineDta, tsName=tsName)
                     cman$lyrInt[[lname]] <- ldta
                     map <- mapgl::maplibre(bounds=lines) |>
@@ -278,7 +246,7 @@ map2dLayerServer <- function(id, cman) {
                     shinyjs::show(id="map2d-card")
                     shinyjs::hide(id="map2d-line-plot")
                 }
-                shiny::showNotification("Data for the line was generated!")
+                progress$set(value=0.9, message="Data for the line was generated!")
             }
         })
         shiny::observeEvent(input$genPlot, {
@@ -312,6 +280,11 @@ map2dLayerServer <- function(id, cman) {
             progress <- shiny::Progress$new()
             on.exit(progress$close())
             progress$set(value=0.3, message="Reading general information for the project.")
+            if (!"b33c21d09941aa9213cb046a10b7ce68" %in% cman$layer$id) {
+                nokAchse <- sf::st_read(dsn=system.file("geodata.gpkg", package="ugrid"), layer="NOK_river_axis") |>
+                    sf::st_set_geometry("geometry") |> sf::st_zm(drop=TRUE)
+                cman$layer <- rbind(cman$layer, nokAchse)
+            }
             addedHash <- names(cman$ugrids)
             intHash <- intersect(addedHash, caseHash)
             sampleHash <- if (length(intHash) > 0) intHash[1] else caseHash[1]
@@ -339,65 +312,5 @@ map2dLayerServer <- function(id, cman) {
             shinyWidgets::updateVirtualSelect(inputId="ncNames1", choices=ncLst)
             progress$set(value=0.9, message="Done.")
         }, ignoreInit=TRUE)
-
-        shiny::observeEvent(input$prepDl, {
-
-            progress <- shiny::Progress$new()
-            on.exit(progress$close())
-            shinyjs::hide("dlMap")
-            progress$set(value=0.3, message="Reading data from NetCDF if not yet...")
-            mdta1 <- isolate(mapData())
-            mdta2 <- NULL
-            withMap2 <- !is.null(isolate(map2dCmp()))
-            if (withMap2)
-                mdta2 <- isolate(mapData2())
-            withIsoline <- isolate(input$isoline)
-            iline1 <- NULL
-            iline2 <- NULL
-            if (withIsoline) {
-                iline1 <- isolate(isolines())
-                if (withMap2)
-                    iline2 <- isolate(isolines2())
-            }
-            aM <- cman$ugrids[[input$ncNames[1]]]
-            ncVar <- aM$getVarName(input$ncVar)
-            varAtt <- aM$atts[varName == ncVar]
-            ts1 <- aM$ts[as.integer(input$tsIdx)]
-            ts2 <- aM$ts[as.integer(input$tsIdx2)]
-            fids <- cman$tbl[hash %in% input$ncNames, paste(hash, collapse = ",")]
-            lgT1 <- sprintf("%s_%s_%s",
-                            varAtt[grepl("long_name", name), val],
-                            ifelse(input$agg == "none", ts1, input$agg),
-                            varAtt[grepl("unit", name), val])
-            lgT2 <- sprintf("%s_%s_%s",
-                            varAtt[grepl("long_name", name), val],
-                            ifelse(input$agg2 == "none", ts2, input$agg2),
-                            varAtt[grepl("unit", name), val])
-            thisLabel <- session$ns("dlMapLabel")
-            pid <- session$ns("")
-            progress$set(value=0.7, message="Sending the task to a background process...")
-            promises::future_promise(
-                ugrid:::prepareData4Download(mdta1=mdta1, mdta2=mdta2, iline1=iline1,
-                                             iline2=iline2, fids=fids, pid=pid, lgT1=lgT1, lgT2=lgT2)
-            ) |>
-                promises::then(
-                    onFulfilled = function(value) {
-                        gpkgFile(value)
-                        shinyjs::show("dlMap")
-                        shiny::showNotification("Map data is ready for downloading!")
-                    },
-                    onRejected = function(reason) {
-                        showNotification(paste0("Fail to prepare map data for downloading. Reason: ", reason$message))
-                    }
-                )
-            progress$set(value=0.9, message="Data is being prepared in background. The download button will be enabled when the preparation is done...")
-        })
-        output$dlMap <- shiny::downloadHandler(
-            filename=paste0(input$ncVar1, "_map_data.gpkg"),
-            contentType="application/geopackage",
-            content=function(file) {
-                file.copy(from=gpkgFile(), to=file)
-            }
-        )
     })
 }

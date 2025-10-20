@@ -17,10 +17,8 @@ nBrks <- function(n){shiny::HTML(rep("<br/>", n))}
 
 #' UI function of main shiny app
 #' The structure of the ui and the big-buttons was inspired by this app: https://github.com/voronoys/voronoys_sc
-#' @keywords internal
 appUi <- function(request) {
 
-    shiny::addResourcePath("www", system.file("app/www", package="ugrid"))
     shiny::addResourcePath("img", system.file("app/www/img", package="ugrid"))
 
      bslib::page_navbar(
@@ -32,6 +30,7 @@ appUi <- function(request) {
          theme = bslib::bs_theme(bootswatch="cerulean"),
          header=shiny::tagList(
              shinyjs::useShinyjs(),
+             rintrojs::introjsUI(),
              tags$head(
                  tags$link(rel="icon", href="favicon.ico"),
                  tags$style(".navbar-header {height: 50px; min-height:25px; padding:0px; margin:0px;}"),
@@ -102,6 +101,33 @@ uiHome <- function() {
     )
 }
 
+uiHomeIntro <- function() {
+    bslib::nav_panel(
+        title = "Introduction", value = "tpHome",
+        bslib::layout_column_wrap(
+            width = "300px", height = 300, fill=FALSE,
+            bslib::card(
+                bslib::card_header("About this app"),
+                shiny::p("This app was created to help you process the output results of hydrological and hydraulic models, especially Delft3D-FM. The output results must be stored in NetCDF format and comply with the UGRID standard. Additionally, the data for the variables must be stored at the elements of the mesh. In the ealier versions of Delft3D-FM, the output data were assigned to separate variables, this app is not designed to support those versions. However, a support may be added in the future.")
+            ),
+            bslib::layout_column_wrap(
+                width = 1, heights_equal = "row",
+                bslib::card(
+                    bslib::card_header("What is a case"),
+                    shiny::p("The output files are normally stored in a folder, in the scope of this app that folder will be called a case. You might familiar with other terminologies like simulations or scenarios. Nevertheless, the app needs a path to that folder in order to process the data. Because the output files are normally really big, so the app will process the data a server-side, therefore, please do not provide any paths to your local machine, from where the app is called. If you have your data at your local machine, please install R, the ugrid package on your computer and then you can use the app locally.")
+                ),
+                shiny::p(),
+                bslib::card(
+                    bslib::card_header("Ugrid Convention"),
+                    lorem::ipsum(2, 5),
+                    shiny::p()
+                )
+            )
+
+        )
+    )
+}
+
 uiSetting <- function() {
 
     sbVer <- shiny::markdown(
@@ -117,14 +143,19 @@ uiSetting <- function() {
             bslib::accordion_panel(
                 title="Case management",
                 shinyWidgets::prettySwitch("initUgrid", "Make Ugrid NetCDF ready to work with when adding cases!"),
-                shiny::h3("Add case"),
+                shiny::h3("Choose or add working cases"),
                 shiny::fluidRow(
+                    shiny::selectizeInput("moreCase", "Select cases to work with",
+                                          choices=ctbl$caseName, multiple=TRUE, width="100%"),
+                    shiny::div(class="d-grid gap-2",
+                               bslib::input_task_button("addSelectedCase", "Add selected cases", width="50%")),
+                    shiny::hr(),
                     shiny::column(9, shinyWidgets::textInputIcon(
                         "casePath", "Add a case using format Name=/path/to/folder",
                         value=getOption("ugrid.case"), width="100%")),
-                    shiny::column(3, shinyWidgets::virtualSelectInput(
+                    shiny::column(3, shiny::div(id="div-caseCrs" ,shinyWidgets::virtualSelectInput(
                         "caseCrs", "CRS", choices=crsidChoices, multiple=FALSE,
-                        autoSelectFirstOption=FALSE, search=TRUE, hideClearButton=FALSE))
+                        autoSelectFirstOption=FALSE, search=TRUE, hideClearButton=FALSE)))
                 ),
                 shiny::div(class="d-grid gap-2", bslib::input_task_button("addCase", "Add case from path", width="50%")),
                 shiny::selectizeInput("cases", "Case(s) to update CRS", choices="", multiple=TRUE, width="100%"),
@@ -132,11 +163,6 @@ uiSetting <- function() {
                                            label_on="Keep CRS in NetCDF files."),
                 shiny::div(class="d-grid gap-2", bslib::input_task_button(
                     "updateCrs", "Apply selected CRS to selected cases", width="50%")),
-                shiny::hr(),
-                shiny::selectizeInput("moreCase", "Select cases to work with",
-                                      choices=ctbl$caseName, multiple=TRUE, width="100%"),
-                shiny::div(class="d-grid gap-2",
-                           bslib::input_task_button("addSelectedCase", "Add selected cases", width="50%"))
             ),
             bslib::accordion_panel(
                 title="Features of interest",
@@ -144,7 +170,7 @@ uiSetting <- function() {
                          or deltares-polyline format (.pli, .pliz).
                          Before uploading the data, please make sure that the CRS information is in the dataset
                          or select one CRS from the list above."),
-                shiny::fileInput("featFile", "Upload features of interest", multiple=TRUE)
+                shiny::div(id="div-featFile", shiny::fileInput("featFile", "Upload features of interest", multiple=TRUE))
                 ),
             bslib::accordion_panel(
                 title="Time setting",
@@ -195,6 +221,8 @@ appServer <- function(input, output, session) {
     if (!exists("cman")) {
         cman <- initCaseManager()
     }
+
+# Tours -----------------------------------------------------------------------------------------------------------
     shiny::updateSelectizeInput(inputId="addSelectedCase", choices=ctbl$caseName, server=TRUE)
     map2dServer(id="retMap", cman=cman)
     map2dCalcServer(id="raster", cman=cman)
@@ -287,7 +315,8 @@ appServer <- function(input, output, session) {
                 stringi::stri_replace_all_fixed("\\", "/")
             names(caseLst) <- newCase[1]
             thisCrs <- ifelse (chkChr(input$crs), input$crs, NA_character_)
-            addCases(caseLst=caseLst, cman=cman, crs=thisCrs, ignoreCrsInFile=!input$keepCrs, initUgrid = input$initUgrid)
+            addCases(caseLst=caseLst, cman=cman, crs=thisCrs, ignoreCrsInFile=!input$keepCrs,
+                     initUgrid = input$initUgrid)
         }
     })
     observeEvent(input$addSelectedCase, {
