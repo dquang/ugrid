@@ -3,36 +3,35 @@ name: "New Task"
 about: "Create a new task related to the R package or the Shiny app"
 title: "[Task] "
 labels: ["task"]
-assignees: ""
 ---
 
-### 🧩 Summary
+### Summary
 Provide a short, clear description of the task or issue.  
 _Example: “Refactor the data validation logic in `process_data()`” or “Add filtering functionality to the Shiny dashboard.”_
 
 ---
 
-### 🎯 Target Area
+### Target Area
 Select what this task focuses on:
 
 - [ ] **R package function(s)**  
-  _List the specific functions involved (e.g. `clean_data()`, `plot_summary()`)._
+  _List the specific functions involved._
 
 - [ ] **Shiny app feature(s)**  
-  _Describe which part of the app this concerns (e.g. “UI filters”, “Download button”, “Reactive table”)._
+  _Describe which part of the app this concerns (e.g. “Setting-Tab”)._
 
 ---
 
-### 🧠 Data Sources
+### Data Sources
 List the data sources involved in this task (if any).  
-_Examples: local CSV files, database connections, APIs, package-internal datasets, etc._
+_Examples: path to the _map.nc files / folder_
 
 - Data location/path or connection details:  
 - Expected structure or schema:  
 
 ---
 
-### ✅ What Should Be Done
+### What Should Be Done
 Describe the specific goals and steps for this task.  
 _Examples:_
 - Implement new function behavior  
@@ -43,13 +42,14 @@ _Examples:_
 
 ---
 
-### 📦 Expected Outcome
+### Expected Outcome
 Describe what the result of completing this task should look like.  
-_Example: “The user can filter the dataset by date range in the Shiny app,” or “Function `summarize_data()` correctly handles missing values.”_
+_Example: “The user can filter the dataset by date range in the Shiny app,” or “Function `xxx)` correctly handles missing values.”_
 
 ---
 
-### 🔗 Additional Notes / References
+### Additional Notes / References
 Include any related issues, merge requests, or documentation links here.
 
-
+@/label ~todo
+/cc @project-manager

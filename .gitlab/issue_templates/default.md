@@ -31,6 +31,6 @@ it's very hard to read otherwise.)
 
 (If you can, link to the line of code that might be responsible for the problem)
 
-/label ~bug ~reproduced ~needs-investigation ~improvement ~todo
+/label ~bug ~todo
 /cc @project-manager
 
