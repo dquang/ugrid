@@ -14,13 +14,16 @@ map2dCalcUi <- function(id) {
                 open=c("Data source"), multiple=FALSE,
                 bslib::accordion_panel(
                     title="Data source", icon=shiny::icon("folder-open"),
-                    shiny::sliderInput(ns("lyr"), "Select a layer", min=1L, max=10L, value=1L, sep=1L),
-                    shiny::p("To update the values for variables and time step, please select a case below."),
                     shiny::textInput(ns("resolution"), label="Raster resolution",
                                      placeholder="one ore two numbers seperated by a space for raster resolution"),
                     shiny::hr(),
                     shiny::h4("First raster parameters"),
+                    shiny::p("To update the values for variables and time step, please select a case below."),
+                    shinyWidgets::virtualSelectInput(ns("cases1"), "Select case for the first raster",
+                                                     choices="", multiple=TRUE, autoSelectFirstOption=TRUE),
                     shiny::selectInput(ns("ncVar1"), "Variable", choices=""),
+                    shinyWidgets::prettySwitch(ns("dryAsNa"), "For water level, treat dry as NaN", value=TRUE),
+                    shiny::sliderInput(ns("lyr"), "Select a layer", min=1L, max=10L, value=1L, sep=1L),
                     shiny::selectizeInput(ns("tsIdx1"), "Time step", choices=""),
                     shiny::radioButtons(ns("agg1"), "Aggregation method",
                                         choices=c("none", "min", "max", "mean"), inline=TRUE),
@@ -32,20 +35,20 @@ map2dCalcUi <- function(id) {
                             multiple=TRUE, search=TRUE),
                         "To select domains from all project that are touched or intersected with given features.
                         Please select the features from the list"),
-                    shinyWidgets::virtualSelectInput(ns("cases1"), "Select case for the first raster",
-                                              choices="", multiple=TRUE, autoSelectFirstOption=TRUE),
-                    shinyWidgets::virtualSelectInput(ns("cases2"), "Select case for the second raster",
-                                                     choices="", multiple=TRUE, autoSelectFirstOption=TRUE),
                     bslib::input_task_button(ns("findDomains"), "Find relevant domains!"),
                     shiny::hr(),
                     shiny::h4("Second raster parameters"),
+                    shinyWidgets::virtualSelectInput(ns("cases2"), "Select case for the second raster",
+                                                     choices="", multiple=TRUE, autoSelectFirstOption=TRUE),
                     shiny::selectizeInput(ns("ncVar2"), "Variable", choices="", multiple=TRUE,
                                           options=list(maxItems=1)),
                     shiny::selectizeInput(ns("tsIdx2"), "Time step", choices=""),
                     shiny::radioButtons(ns("agg2"), "Aggregation method",
                                         choices=c("none", "min", "max", "mean"), inline=TRUE),
                     shinyWidgets::virtualSelectInput(ns("ncNames2"), "NetCDF files / domains",
-                                              choices="", multiple=TRUE, search=TRUE)
+                                              choices="", multiple=TRUE, search=TRUE),
+                    shiny::selectInput(ns("operator"), "Raster operator", choices=c("-", "+", "*", "/")),
+                    bslib::input_task_button(ns("calculate"), "Calculate & generate map")
                     ),
                 bslib::accordion_panel(
                     title="Classification & Symbology", icon=shiny::icon("gears"),
@@ -76,11 +79,6 @@ map2dCalcUi <- function(id) {
                         selected=c("tableau", "brewer", "powerbi", "cols4all"))
                 ),
                 bslib::accordion_panel(
-                    title="Raster calculation", icon=shiny::icon("microscope"),
-                    shiny::selectInput(ns("operator"), "Raster operator", choices=c("-", "+", "*", "/")),
-                    bslib::input_task_button(ns("calculate"), "Calculate & generate map")
-                ),
-                bslib::accordion_panel(
                     title="Export data", icon=shiny::icon("file-export"),
                     shiny::actionButton(ns("prepDl"), "Prepare data for downloading...", disabled=TRUE),
                     shiny::downloadButton(ns("dlMap"), "Download map data!")
@@ -102,7 +100,6 @@ map2dCalcUi <- function(id) {
         bslib::card(
             height="75vh", full_screen=TRUE, id=ns("map2d-cmp-card"),
             shiny::imageOutput(ns("gif"), height="500px")
-            # leaflet::leafletOutput(ns("map2dCmp"), height="550px")
         )
 
     )
@@ -117,6 +114,7 @@ map2dCalcServer <- function(id, cman) {
         shinyjs::hide(id="dlMap")
         shinyjs::hide(id="map2d-cmp-card")
         shinyjs::hide(id="map2d-card")
+        shinyjs::hide(id="tsIdxAni")
         map2d <- shiny::reactiveVal()
         map2dCmp <- shiny::reactiveVal()
         gpkgFile <- shiny::reactiveVal()
@@ -140,7 +138,8 @@ map2dCalcServer <- function(id, cman) {
             selectedMeshes <- lapply(cman$tbl[hash %in% ncNames1, path], addUgrid, cman=cman)
             if (length(selectedMeshes) < 1)
                 return(NULL)
-            meshLst <- getMapData(mesh=selectedMeshes, variable=ncVar1, tsIdx=tsIdx1, agg=agg1)
+            dryAsNa <- isTRUE(input$dryAsNa)
+            meshLst <- getMapData(mesh=selectedMeshes, variable=ncVar1, tsIdx=tsIdx1, agg=agg1, dryAsNa=dryAsNa)
             polLst <- list()
             for (i in seq_along(meshLst)) {
                 polLst[[i]] <- data.table::data.table(meshLst[[i]]$ret)
@@ -163,7 +162,8 @@ map2dCalcServer <- function(id, cman) {
             selectedMeshes <- lapply(cman$tbl[hash %in% ncNames2, path], addUgrid, cman=cman)
             if (length(selectedMeshes) < 1)
                 return(NULL)
-            meshLst <- getMapData(mesh=selectedMeshes, variable=ncVar2, tsIdx=tsIdx2, agg=agg2)
+            dryAsNa <- isTRUE(input$dryAsNa)
+            meshLst <- getMapData(mesh=selectedMeshes, variable=ncVar2, tsIdx=tsIdx2, agg=agg2, dryAsNa=dryAsNa)
             polLst <- list()
             for (i in seq_along(meshLst)) {
                 polLst[[i]] <- data.table::data.table(meshLst[[i]]$ret)
@@ -321,8 +321,10 @@ map2dCalcServer <- function(id, cman) {
             shinyjs::show(id="map2d-card")
             shinyjs::hide(id="map2d-cmp-card")
             tmpFolder <- rasters$tmpFolder
+            dryAsNa <- isTRUE(input$dryAsNa)
             promises::future_promise(
-                ugrid::genRaster4All(mesh=selectedMeshes, variable=ncVar1, folder=tmpFolder)
+                expr=ugrid::genRaster4All(mesh=selectedMeshes, variable=ncVar1, folder=tmpFolder, dryAsNa=dryAsNa),
+                seed=TRUE
             ) |>
                 promises::then(
                     onFulfilled = function(files) {
@@ -342,10 +344,12 @@ map2dCalcServer <- function(id, cman) {
                         map2d(tm)
                         shiny::showNotification("Raster data is ready for exploring!")
                         shinyjs::enable("genAll")
+                        shinyjs::show("tsIdxAni")
                     },
                     onRejected = function(reason) {
                         shiny::showNotification(paste0("Fail to prepare rasters. Reason: ", reason$message))
                         shinyjs::enable("genAll")
+                        shinyjs::hide("tsIdxAni")
                     }
                 )
         })
@@ -470,7 +474,7 @@ map2dCalcServer <- function(id, cman) {
             sampleHash <- if (length(intHash) > 0) intHash[1] else caseHash[1]
             aM <- addUgrid(path=cman$tbl[hash == sampleHash, path], cman=cman)
             ncVars <- aM$m2D$face
-            ncVars <- ncVars[!ncVars %in% aM$m2D$topo]
+            ncVars <- ncVars[!ncVars %in% unlist(aM$m2D$topo)]
             shiny::updateSelectInput(inputId="ncVar1", choices=names(ncVars))
             if (length(aM$totalTs) > 0) {
                 tsIds <- seq.int(1, aM$totalTs, 1)
@@ -502,7 +506,7 @@ map2dCalcServer <- function(id, cman) {
             sampleHash <- if (length(intHash) > 0) intHash[1] else caseHash[1]
             aM <- addUgrid(path=cman$tbl[hash == sampleHash, path], cman=cman)
             ncVars <- aM$m2D$face
-            ncVars <- ncVars[!ncVars %in% aM$m2D$topo]
+            ncVars <- ncVars[!ncVars %in% unlist(aM$m2D$topo)]
             shiny::updateSelectInput(inputId="ncVar2", choices=names(ncVars))
             if (length(aM$totalTs) > 0) {
                 tsIds <- seq.int(1, aM$totalTs, 1)

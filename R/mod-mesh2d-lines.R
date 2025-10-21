@@ -13,9 +13,10 @@ map2dLineUi <- function(id) {
                 open=c("Data source"), multiple=FALSE,
                 bslib::accordion_panel(
                     title="Data source", icon=shiny::icon("folder-open"),
-                    shiny::p("To update the values for variables and time step, please select a case below."),
-                    shiny::hr(),
                     shiny::h4("First raster parameters"),
+                    shiny::p("To update the values for variables and time step, please select a case below."),
+                    shinyWidgets::virtualSelectInput(ns("cases1"), "Select case(s)",
+                                                     choices="", multiple=TRUE, autoSelectFirstOption=TRUE),
                     shiny::sliderInput(ns("lyr"), "Select a layer", min=1L, max=10L, value=1L, step=1L, pre="Layer "),
                     shiny::selectInput(ns("ncVar1"), "Variable", choices=""),
                     shiny::selectizeInput(ns("tsIdx1"), "Time step", choices=""),
@@ -29,10 +30,6 @@ map2dLineUi <- function(id) {
                             multiple=TRUE, search=TRUE),
                         "To select domains from all project that are touched or intersected with given features.
                         Please select the features from the list"),
-                    shinyWidgets::virtualSelectInput(ns("cases1"), "Select case(s)",
-                                                     choices="", multiple=TRUE, autoSelectFirstOption=TRUE),
-                    shinyWidgets::virtualSelectInput(ns("cases2"), "Select a reference case",
-                                                     choices="", multiple=FALSE, autoSelectFirstOption=FALSE),
                     bslib::input_task_button(ns("sliceData"), "Slice data for the line!!"),
                     shiny::hr()
                 ),
@@ -287,7 +284,7 @@ map2dLineServer <- function(id, cman) {
             sampleHash <- if (length(intHash) > 0) intHash[1] else caseHash[1]
             aM <- addUgrid(path=cman$tbl[hash == sampleHash, path], cman=cman)
             ncVars <- aM$m2D$face
-            ncVars <- ncVars[!ncVars %in% aM$m2D$topo]
+            ncVars <- ncVars[!ncVars %in% unlist(aM$m2D$topo)]
             if (any(aM$vars$ndims > 2)) {
                 shinyjs::show("lyr")
                 nLyr <- aM$dims[name == aM$m2D$topo$layer_dimension, as.integer(length)]

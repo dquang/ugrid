@@ -290,7 +290,7 @@ map2dLayerServer <- function(id, cman) {
             sampleHash <- if (length(intHash) > 0) intHash[1] else caseHash[1]
             aM <- addUgrid(path=cman$tbl[hash == sampleHash, path], cman=cman)
             ncVars <- aM$m2D$layer
-            ncVars <- ncVars[!ncVars %in% aM$m2D$topo]
+            ncVars <- ncVars[!ncVars %in% unlist(aM$m2D$topo)]
             ncVars <- ncVars[ncVars %in% aM$vars[hasTime==TRUE, name]]
             if (length(ncVars) < 1) {
                 shiny::showNotification("Found no variables for layers in case: ", input$cases1, type="error")

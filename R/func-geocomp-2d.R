@@ -7,9 +7,10 @@
 #' @param agg Option for aggregating the data by rows. The aggregation functions come from `matrixStats` package.
 #' @param force If TRUE, the data stored in Ugrid object, if any, will be read again.
 #' @param onlyMain If TRUE, the cell elements of other domains will be removed.
+#' @param dryAsNa If TRUE (default), values for dried (waterlevel - elevation < 0) cells will be assigned NaN.
 #' @returns A sf object.
 #' @keywords internal
-getMapData <- function(mesh, variable, lyr=1L, tsIdx=1L, agg="none", onlyMain=FALSE) {
+getMapData <- function(mesh, variable, lyr=1L, tsIdx=1L, agg="none", onlyMain=FALSE, dryAsNa=TRUE) {
 
     if (!is(mesh, "list"))
         mesh <- list(mesh)
@@ -18,13 +19,13 @@ getMapData <- function(mesh, variable, lyr=1L, tsIdx=1L, agg="none", onlyMain=FA
     tsIdx <- as.integer(tsIdx)
     if (length(mesh) < 4) {
         retLst <- lapply(mesh, function(x, ...) x$getData4Polygon(...),
-                         variable=variable, lyr=lyr, tsIdx=tsIdx, agg=agg, onlyMain=onlyMain)
+                         variable=variable, lyr=lyr, tsIdx=tsIdx, agg=agg, onlyMain=onlyMain, dryAsNa=dryAsNa)
     } else {
         nCores <- parallel::detectCores()
         doParallel::registerDoParallel(cores = parallel::detectCores() - 1)
         `%dopar%` <- foreach::`%dopar%`
         retLst <- foreach::foreach(x=mesh, .combine=c) %dopar% {
-            x$getData4Polygon(variable=variable, lyr=lyr, tsIdx=tsIdx, agg=agg, onlyMain=onlyMain)
+            x$getData4Polygon(variable=variable, lyr=lyr, tsIdx=tsIdx, agg=agg, onlyMain=onlyMain, dryAsNa=dryAsNa)
             list(x)
         }
     }
@@ -418,27 +419,33 @@ genVector4All <- function(
 
     if (!is.list(mesh))
         mesh <- list(mesh)
-    chkVar <- c("sea_water_speed", "sea_water_x_velocity", "sea_water_y_velocity") %in%
-        names(mesh[[1]]$m2D$face)
     faceX <- lapply(mesh, function(x) x$getData4Face2D(x$m2D$face$face_x, onlyMain=TRUE)) |> unlist()
     faceY <- lapply(mesh, function(x) x$getData4Face2D(x$m2D$face$face_y, onlyMain=TRUE)) |> unlist()
     ucxVar <- mesh[[1]]$vars[grepl("sea_water_x_velocity", standard_name) & grepl("vector", long_name), name]
     ucyVar <- mesh[[1]]$vars[grepl("sea_water_y_velocity", standard_name) & grepl("vector", long_name), name]
+    if (length(ucxVar) != 1 | length(ucyVar) != 1) {
+        warning("Not enough velocity variables in the NetCDF files.")
+        return(NULL)
+    }
     ucx <- lapply(mesh, function(x) x$getData4Face2D(ucxVar, lyr=lyr, onlyMain=TRUE))
     ucx <- do.call(rbind, ucx)
     ucy <- lapply(mesh, function(x) x$getData4Face2D(ucyVar, lyr=lyr, onlyMain=TRUE))
     ucy <- do.call(rbind, ucy)
+    if (all(is.na(ucx)) | all(is.na(ucy))) {
+        warning("All velocity values are NaN")
+        return(NULL)
+    }
     ucmag <- sqrt(ucx^2 + ucy^2)
     hasBl <- chkDbl(baseLength)
     if (!hasBl) {
-        mesh[[1]]$buildFace2DPoly()
-        baseLength <- sf::st_area(mesh[[1]]$m2D$face2D[sample.int(n=nrow(mesh[[1]]$m2D$face2D), size=1), ]) |>
+        fpol <- mesh[[1]]$buildFace2DPoly()
+        baseLength <- sf::st_area(fpol[sample.int(n=nrow(fpol), size=1), ]) |>
             sqrt() |> as.numeric()
     }
     thisCrs <- mesh[[1]]$crs
     thisTf <- mesh[[1]]$tf
     thisNewCrs <- mesh[[1]]$newCrs
-    thisFillValue <- mesh[[1]]$atts[varName == mesh[[1]]$m2D$face$sea_water_speed &
+    thisFillValue <- mesh[[1]]$atts[varName == ucxVar &
                                         grepl("FillValue", name, ignore.case = TRUE), as.numeric(val)]
     nCores <- parallel::detectCores()
     doParallel::registerDoParallel(cores = parallel::detectCores() - 1)
@@ -575,11 +582,16 @@ genRaster4All <- function(mesh, variable="sea_surface_height", lyr=1L,
     }
     dta <- lapply(mesh, function(x) x$getData4Face2D(variable=variable, lyr=lyr))
     dta <- do.call(rbind, dta)
-    if (variable=="sea_surface_height" & dryAsNa) {
-        bl <- lapply(mesh, function(x) x$getData4Face2D(variable=x$m2D$face$altitude, lyr=lyr))
-        bl <- do.call(rbind, bl) |> as.vector()
-        dta <- dta - bl
-        dta[dta < 1e-7] <- NaN
+    if (grepl("sea_surface_height", variable) & dryAsNa) {
+        altitudeVar <- mesh[[1]]$getVarName("altitude", topo="m2D", at="face")
+        if (chkChr(altitudeVar)) {
+            bl <- lapply(mesh, function(x) x$getData4Face2D(variable=x$m2D$face$altitude, lyr=lyr))
+            bl <- do.call(rbind, bl) |> as.vector()
+            dta <- abs(dta - bl)
+            dta[dta < 1e-7] <- NaN
+        } else {
+            warning("Altitude variable for faces was not found. Dry areas were not assigned as NaN.")
+        }
     }
     ncNames <- lapply(mesh, function(x) x$path) |> unlist() |> sort() |> paste(collapse = ";")
     fpre <- digest::digest(ncNames)

@@ -1,6 +1,6 @@
 Package: ugrid
 Title: Postprocessing for NetCDF-Data in UGRID-Format
-Version: 0.1.3
+Version: 0.1.4
 Authors@R: 
     person("Quang", "Duong", , "duong@bafg.de", role = c("aut", "cre"))
 Description: An R package for post-processing model outputs stored in NetCDF files following the UGRID convention.

@@ -462,15 +462,15 @@ Ugrid <- R6::R6Class(
                 return(NULL)
             }
             aD <- self$getData4Face2D(variable=variable, lyr=lyr, force=force)
-            if (identical(variable, "sea_surface_height") & dryAsNa) {
+            if (grepl("sea_surface_height", variable) & dryAsNa) {
                 altitudeVar <- self$getVarName("altitude", topo="m2D", at="face")
                 if (chkChr(altitudeVar)) {
                     altitude <- self$getData4Face2D(variable="altitude", lyr=lyr, force=force)
                     altitude <- as.vector(altitude)
-                    dry <- aD - altitude
+                    dry <- abs(aD - altitude) < 1e-9
                     aD[dry] <- NaN
                 } else {
-                    warning("Cannot rea- altitude data. Values for dry faces ware not assigned as NaN.")
+                    warning("Cannot read altitude data. Values for dry faces ware not assigned as NaN.")
                 }
             }
             ncVar <- self$getVarName(variable, topo="m2D", at="face")
