@@ -31,6 +31,12 @@ it's very hard to read otherwise.)
 
 (If you can, link to the line of code that might be responsible for the problem)
 
+<<<<<<< HEAD
 /label ~bug ~reproduced ~needs-investigation ~improvement ~todo
 /cc @project-manager
 
+=======
+/label ~bug ~reproduced ~needs-investigation ~improvement
+/cc @project-manager
+/assign @qa-tester
+>>>>>>> da7c07ba9e1028b61a7fb66629da22d0144c890e
