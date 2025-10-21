@@ -108,7 +108,7 @@ genContourGif <- function(tbl, fps=12, fname=tempfile(fileext=".gif"), xRange=c(
 }
 
 #' @keywords internal
-genContourFacets <- function(tbl, tsIds, xRange=c(0, 65), xReverse=TRUE,
+genContourFacets <- function(tbl, tsIds, xRange=c(0, 65), xReverse=FALSE,
                           xName="Distance from Brünsbuttel [km]",
                           yName="Depth [m]",
                           nClass=7, style="kmeans", colPal="blue_teal",
