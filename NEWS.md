@@ -11,3 +11,8 @@
 * Reorganize ugridApp layout
 * Correct the behavior with *dry areas*
 * Add CODE OF CONDUCT
+
+# ugrid 0.1.4.1
+
+* remove `atts` out of `Ugrid` class attributes
+* solve the issue with velocity vector

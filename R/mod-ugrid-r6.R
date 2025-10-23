@@ -13,18 +13,24 @@ Ugrid <- R6::R6Class(
             vars[!is.na(dim2), dim2Name := dims[.SD, on = .(id = dim2), name]]
             vars[!is.na(dim3), dim3Name := dims[.SD, on = .(id = dim3), name]]
             vars <- vars[ndims > 0]
-            varNames <- atts[grepl("^standard_name|^long_name", name), c("name", "val", "varName")] |>
+            atts2 <- atts[grepl("^standard_name|^long_name|FillValue|^unit", name, ignore.case=TRUE),
+                             c("name", "val", "varName")] |>
                 unique() |>
                 dcast(varName ~ name , value.var = "val")
-            varNames[is.na(standard_name) | (nchar(standard_name) < 1), standard_name := varName]
-            varNames[is.na(long_name) | (nchar(long_name) < 1), long_name := varName]
-            vars <- merge(vars, varNames, by.x="name", by.y="varName")
+            vCols <- colnames(atts2) |>
+                stringi::stri_replace_all_regex("units", "unit", opts_regex=list(case_insensitive=TRUE)) |>
+                stringi::stri_replace_all_regex(".*FillValue$", "fill_value", opts_regex=list(case_insensitive=TRUE))
+            colnames(atts2) <- vCols
+            atts2[, fill_value := as.numeric(fill_value)]
+            atts2[is.na(standard_name) | (nchar(standard_name) < 1), standard_name := varName]
+            atts2[is.na(long_name) | (nchar(long_name) < 1), long_name := varName]
+            vars <- merge(vars, atts2, by.x="name", by.y="varName", all.x=TRUE)
             vars[, hasTime := mapply(
                 function(...) grepl("/time", paste("/", ..., sep="/")),
                 dim1Name, dim2Name, dim3Name, USE.NAMES = FALSE)]
             self$vars <- vars
             self$dims <- dims
-            self$atts <- atts
+            # self$atts <- atts
             topoVars <- atts[grepl("^mesh_topology$", val), varName] # there should be max 3 mesh_topologies
             topo1D <- atts[grepl("topology_dimension", name) & val == "1", varName]
             if (length(topo1D) == 1) {
@@ -177,9 +183,8 @@ Ugrid <- R6::R6Class(
                 if (tUnitFactor != 1)
                     ts <- ts * tUnitFactor
                 self$ts <- as.POSIXct(ts, tz=tz, origin=t0)
-                self$t0 <- t0
                 self$tz <- tz
-                self$totalTs <- dims[name=="time", length]
+                self$totalTs <- length(ts)
             }
 
             if (!self$ignoreCrsInFile) {
@@ -267,8 +272,7 @@ Ugrid <- R6::R6Class(
             invisible(self)
         },
         #' @description
-        #' Find variable based on standard_name or name (case-insensitive).
-        #' If there are two more nc variables found, the first one will be given.
+        #' Find NetCDF variable based on standard_name or name (case-insensitive).
         #' @param variable Character of standard name (UGRID) or name of the variable.
         #' @param topo Topology (m1D, m2D, or m3D).
         #' @param at Type of elements (node, edge, face, interface, layer, or volume).
@@ -279,32 +283,23 @@ Ugrid <- R6::R6Class(
             topo <- match.arg(topo)
             at <- match.arg(at)
             if (!chkChr(variable)) {
-                ret <- NULL
+                ncVar <- NULL
             } else {
-                varPat <- paste0("^", variable, "$")
-                ncVar <- grep(varPat, self[[topo]][[at]], ignore.case=TRUE, value=TRUE)
-                if (length(ncVar) > 0) {
-                    ret <- ncVar
-                } else {
+                ncVar <- grep(paste0("^", variable, "$"), self[[topo]][[at]], ignore.case=TRUE, value=TRUE)
+                if (!chkChr(ncVar)) {
                     vars <- self$vars[name %in% self[[topo]][[at]]]
-                    ncVar <- vars[grepl(varPat, standard_name, ignore.case=TRUE), name]
-                    if (length(ncVar) > 0) {
-                        ret <- ncVar
-                    } else {
-                        ncVar <- vars[grepl(varPat, long_name, ignore.case=TRUE), name]
-                        if (length(ncVar) > 0) {
-                            ret <- ncVar[1]
-                        } else {
-                            ret <- NULL
+                    ncVar <- vars[grepl(variable, standard_name, ignore.case=TRUE), name]
+                    if (!chkChr(ncVar)) {
+                        ncVar <- vars[grepl(variable, long_name, ignore.case=TRUE), name]
+                        if (!chkChr(ncVar)) {
+                            message("Variable with name: ", variable,
+                                    " does not found or the name is ambigious. Result: ",
+                                    paste(ncVar, collapse=","))
+                            ncVar <- NULL
                         }
                     }
                 }
             }
-            if (length(ret) > 1)
-                warning("More than nc variables are found.")
-            else if (length(ret) < 1)
-                message("Found no nc variable for: ", variable)
-
             return(ncVar)
         },
         #' @description
@@ -321,7 +316,7 @@ Ugrid <- R6::R6Class(
         #' @param variable Character of standard name (UGRID) or name of the variable
         #' @param force Logical. Force to read from NetCDF or first get from cache?
         #' @param ... will be forwarded to `RNetCDF::var.get.nc`
-        getData4Node1D = function(variable, force=FALSE,...) {
+        getData4Node1D = function(variable, force=FALSE, ...) {
 
             ret <- self$getData4Any(variable=variable, force=force, topo="m1D", at="node", ...)
             invisible(ret)
@@ -331,7 +326,7 @@ Ugrid <- R6::R6Class(
         #' @param variable Character of standard name (UGRID) or name of the variable
         #' @param force Logical. Force to read from NetCDF or first get from cache?
         #' @param ... will be forwarded to `RNetCDF::var.get.nc`
-        getData4Edge1D = function(variable, force=FALSE,...) {
+        getData4Edge1D = function(variable, force=FALSE, ...) {
 
             ret <- self$getData4Any(variable=variable, force=force, topo="m1D", at="edge", ...)
 
@@ -343,7 +338,7 @@ Ugrid <- R6::R6Class(
         #' @param lyr layer or interface indexes, or "all" for the whole dataset.
         #' @param force Logical. Force to read from NetCDF or first get from cache?
         #' @param ... will be forwarded to `RNetCDF::var.get.nc`
-        getData4Node2D = function(variable, lyr="all", force=FALSE,...) {
+        getData4Node2D = function(variable, lyr="all", force=FALSE, ...) {
 
             ret <- self$getData4Any(variable=variable, lyr=lyr, force=force, topo="m2D", at="node", ...)
 
@@ -355,7 +350,7 @@ Ugrid <- R6::R6Class(
         #' @param lyr layer or interface indexes, or "all" for the whole dataset.
         #' @param force Logical. Force to read from NetCDF or first get from cache?
         #' @param ... will be forwarded to `RNetCDF::var.get.nc`
-        getData4Edge2D = function(variable, lyr="all", force=FALSE,...) {
+        getData4Edge2D = function(variable, lyr="all", force=FALSE, ...) {
 
             ret <- self$getData4Any(variable=variable, lyr=lyr, force=force, topo="m2D", at="edge", ...)
 
@@ -368,7 +363,7 @@ Ugrid <- R6::R6Class(
         #' @param onlyMain If TRUE, the cell elements of other domains will be removed.
         #' @param force Logical. Force to read from NetCDF or first get from cache?
         #' @param ... will be forwarded to `RNetCDF::var.get.nc`
-        getData4Face2D = function(variable, lyr="all", onlyMain=FALSE, force=FALSE,...) {
+        getData4Face2D = function(variable, lyr="all", onlyMain=FALSE, force=FALSE, ...) {
 
             ret <- self$getData4Any(variable=variable, lyr=lyr, force=force, topo="m2D", at="face", ...)
 
@@ -629,8 +624,6 @@ Ugrid <- R6::R6Class(
         nc=NULL,
         #' @field vars data.table of variables
         vars = data.table::data.table(),
-        #' @field atts data.table of attributes for vars
-        atts = data.table::data.table(),
         #' @field dims data.table of dimensions
         dims = data.table::data.table(),
         #' @field m1D list of attributes of 1D-topology
@@ -653,8 +646,6 @@ Ugrid <- R6::R6Class(
         data2D=list(),
         #' @field data3D a named list of matrix stored the data for mesh3d-variables once read
         data3D=list(),
-        #' @field t0 Starting time of the simulation
-        t0=NULL,
         #' @field tz Time zone
         tz=NULL,
         #' @field totalTs Number of timesteps

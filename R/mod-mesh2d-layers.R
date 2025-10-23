@@ -217,7 +217,7 @@ map2dLayerServer <- function(id, cman) {
                     dta <- sapply(lineMesh, function(x) as.vector(x$data2D$face[[ncVar1]])) |> unlist()
                     aM <- lineMesh[[1]]
                     vName <- aM$getVarName(ncVar1)
-                    ncUnit1 <- aM$atts[varName == vName & grepl("unit", name), val]
+                    ncUnit1 <- aM$vars[name == vName, unit]
                     mDim <- dim(aM$data2D$face[[ncVar1]])
                     mDim[2] <- as.integer(length(dta) / mDim[1] / mDim[3])
                     dta <- array(dta, dim=mDim)
@@ -261,7 +261,7 @@ map2dLayerServer <- function(id, cman) {
             caseHashes <- cman$tbl[caseName %in% input$cases1 & hash %in% names(cman$ugrids), hash]
             aM <- cman$ugrids[[caseHashes[1]]]
             vName <-  aM$getVarName(ncVar1)
-            ncUnit1 <- aM$atts[varName == vName & grepl("unit", name), val]
+            ncUnit1 <- aM$vars[name == vName, unit]
             tsName <- aM$ts
             legendTitle <- paste0(ncVar1, " [", ncUnit1,"]")
             shinyjs::hide(id="map2d-card")

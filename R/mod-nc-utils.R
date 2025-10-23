@@ -27,9 +27,10 @@ getVarTbl = function(nc = NULL){
     dimCols <- c("dim1", "dim2", "dim3")
     dimCols <- dimCols[! dimCols %in% colnames(varTbl)]
     if (length(dimCols) > 0)
-        varTbl[, (dimCols) := as.list(rep(NA, length(dimCols)))]
+        varTbl[, (dimCols) := as.list(rep(NA_integer_, length(dimCols)))]
     if (toClose)
         RNetCDF::close.nc(nc)
+    data.table::setkey(varTbl, name)
     return(varTbl)
 }
 

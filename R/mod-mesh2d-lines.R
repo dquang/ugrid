@@ -179,7 +179,7 @@ map2dLineServer <- function(id, cman) {
             caseHashes <- cman$tbl[caseName %in% input$cases1 & hash %in% names(cman$ugrids), hash]
             aM <- cman$ugrids[[caseHashes[1]]]
             vName <- aM$getVarName(ncVar1)
-            vUnit <- aM$atts[varName == vName & grepl("unit", name), val]
+            vUnit <- aM$vars[name == vName, unit]
             if (chkChr(vUnit))
                 yTitle <- paste0(ncVar1, " [", vUnit, "]")
             else
@@ -238,7 +238,7 @@ map2dLineServer <- function(id, cman) {
                     dta <- sapply(lineMesh, function(x) as.vector(x$data2D$face[[ncVar1]])) |> unlist()
                     aM <- lineMesh[[1]]
                     vName <- aM$getVarName(ncVar1)
-                    ncUnit1 <- aM$atts[varName == vName & grepl("unit", name), val]
+                    ncUnit1 <- aM$vars[name == vName, unit]
                     mDim <- dim(aM$data2D$face[[ncVar1]])
                     nDim <- length(mDim)
                     if (nDim > 2)
@@ -302,66 +302,5 @@ map2dLineServer <- function(id, cman) {
             shinyWidgets::updateVirtualSelect(inputId="ncNames1", choices=ncLst)
             progress$set(value=0.9, message="Done.")
         }, ignoreInit=TRUE)
-
-        shiny::observeEvent(input$prepDl, {
-
-            progress <- shiny::Progress$new()
-            on.exit(progress$close())
-            shinyjs::hide("dlMap")
-            progress$set(value=0.3, message="Reading data from NetCDF if not yet...")
-            mdta1 <- isolate(mapData())
-            mdta2 <- NULL
-            withMap2 <- !is.null(isolate(map2dCmp()))
-            if (withMap2)
-                mdta2 <- isolate(mapData2())
-            withIsoline <- isolate(input$isoline)
-            iline1 <- NULL
-            iline2 <- NULL
-            if (withIsoline) {
-                iline1 <- isolate(isolines())
-                if (withMap2)
-                    iline2 <- isolate(isolines2())
-            }
-            aM <- cman$ugrids[[input$ncNames[1]]]
-            ncVar <- aM$getVarName(input$ncVar)
-            varAtt <- aM$atts[varName == ncVar]
-            ts1 <- aM$ts[as.integer(input$tsIdx)]
-            ts2 <- aM$ts[as.integer(input$tsIdx2)]
-            fids <- cman$tbl[hash %in% input$ncNames, paste(hash, collapse = ",")]
-            lgT1 <- sprintf("%s_%s_%s",
-                            varAtt[grepl("long_name", name), val],
-                            ifelse(input$agg == "none", ts1, input$agg),
-                            varAtt[grepl("unit", name), val])
-            lgT2 <- sprintf("%s_%s_%s",
-                            varAtt[grepl("long_name", name), val],
-                            ifelse(input$agg2 == "none", ts2, input$agg2),
-                            varAtt[grepl("unit", name), val])
-            thisLabel <- session$ns("dlMapLabel")
-            pid <- session$ns("")
-            progress$set(value=0.7, message="Sending the task to a background process...")
-            promises::future_promise(
-                ugrid:::prepareData4Download(mdta1=mdta1, mdta2=mdta2, iline1=iline1,
-                                             iline2=iline2, fids=fids, pid=pid, lgT1=lgT1, lgT2=lgT2)
-            ) |>
-                promises::then(
-                    onFulfilled = function(value) {
-                        gpkgFile(value)
-                        shinyjs::show("dlMap")
-                        shiny::showNotification("Map data is ready for downloading!")
-                    },
-                    onRejected = function(reason) {
-                        showNotification(paste0("Fail to prepare map data for downloading. Reason: ", reason$message))
-                    }
-                )
-            progress$set(value=0.9, message="Data is being prepared in background. The download button will be enabled when the preparation is done...")
-        })
-
-        output$dlMap <- shiny::downloadHandler(
-            filename=paste0(input$ncVar1, "_map_data.gpkg"),
-            contentType="application/geopackage",
-            content=function(file) {
-                file.copy(from=gpkgFile(), to=file)
-            }
-        )
     })
 }

@@ -254,11 +254,10 @@ map2dCalcServer <- function(id, cman) {
                 selectedMeshes <- lapply(cman$tbl[hash %in% input$ncNames1, path], addUgrid, cman=cman)
                 aM <- selectedMeshes[[1]]
                 ncVar <- aM$getVarName(input$ncVar1)
-                varAtt <- aM$atts[varName == ncVar]
                 ts1 <- paste0("At: ", aM$ts[as.integer(input$tsIdx1)])
                 lgT1 <- sprintf("%s \n(%s) [%s]", input$ncVar1,
                                 ifelse(input$agg1 == "none", ts1, input$agg1),
-                                varAtt[grepl("unit", name), val])
+                                aM$vars[name == ncVar, unit])
                 resolution <- txt2NumVec(input$resolution)
                 map1 <- genTmapRasterOutput(pol=mdta1, field=input$ncVar1, resolution=resolution,
                                             n=input$nClass, style=input$clsStyle,
@@ -314,7 +313,7 @@ map2dCalcServer <- function(id, cman) {
             tbl <- data.table::copy(cman$tbl)
             resolution <- txt2NumVec(input$resolution)
             vName <- selectedMeshes[[1]]$getVarName(ncVar1)
-            varUnit <- selectedMeshes[[1]]$atts[varName == vName & grepl("^unit", name, ignore.case = TRUE), val]
+            varUnit <- selectedMeshes[[1]]$vars[name == vName, unit]
             shiny::updateSliderInput(inputId="tsIdxAni", max=selectedMeshes[[1]]$totalTs)
             shiny::showNotification("The rasters will be processed in the background. You will be informed when it has been done.")
             shinyjs::disable("genAll")
@@ -547,18 +546,18 @@ map2dCalcServer <- function(id, cman) {
             }
             aM <- cman$ugrids[[input$ncNames[1]]]
             ncVar <- aM$getVarName(input$ncVar)
-            varAtt <- aM$atts[varName == ncVar]
+            thisVar <- aM$vars[name == ncVar]
             ts1 <- aM$ts[as.integer(input$tsIdx)]
             ts2 <- aM$ts[as.integer(input$tsIdx2)]
             fids <- cman$tbl[hash %in% input$ncNames, paste(hash, collapse = ",")]
             lgT1 <- sprintf("%s_%s_%s",
-                            varAtt[grepl("long_name", name), val],
+                            thisVar[, long_name],
                             ifelse(input$agg == "none", ts1, input$agg),
-                            varAtt[grepl("unit", name), val])
+                            thisVar[, unit])
             lgT2 <- sprintf("%s_%s_%s",
-                            varAtt[grepl("long_name", name), val],
+                            thisVar[, long_name],
                             ifelse(input$agg2 == "none", ts2, input$agg2),
-                            varAtt[grepl("unit", name), val])
+                            thisVar[, unit])
             thisLabel <- session$ns("dlMapLabel")
             pid <- session$ns("")
             progress$set(value=0.7, message="Sending the task to a background process...")

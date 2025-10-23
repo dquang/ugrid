@@ -346,7 +346,7 @@ genVectorLayer <- function(
     }
     tsIdx <- as.integer(tsIdx)
     if (length(fillValue) < 1)
-        fillValue <- x$atts[grepl("fillvalue", name, ignore.case = TRUE), val[1]] |> as.numeric()
+        fillValue <- x$vars[!is.na(fill_value), , fill_value[1]] |> as.numeric()
     if (length(fillValue) < 1)
         fillValue <- -Inf
     if (length(tsIdx) < 1)
@@ -445,8 +445,7 @@ genVector4All <- function(
     thisCrs <- mesh[[1]]$crs
     thisTf <- mesh[[1]]$tf
     thisNewCrs <- mesh[[1]]$newCrs
-    thisFillValue <- mesh[[1]]$atts[varName == ucxVar &
-                                        grepl("FillValue", name, ignore.case = TRUE), as.numeric(val)]
+    thisFillValue <- mesh[[1]]$vars[name == ucxVar, fill_value]
     nCores <- parallel::detectCores()
     doParallel::registerDoParallel(cores = parallel::detectCores() - 1)
     `%dopar%` <- foreach::`%dopar%`

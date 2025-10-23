@@ -247,7 +247,7 @@ map2dServer <- function(id, cman) {
             }
             selectedMeshes <- lapply(cman$tbl[hash %in% input$ncNames1, path], addUgrid, cman=cman)
             # TODO: separate vector layers for each domains so that they can be reused.
-            lyr <- ifelse(chkInt(input$lyr), input$lyr, 1L)
+            lyr <- ifelse(chkInt(as.integer(input$lyr)), input$lyr, 1L)
             ret <- genVector4All(mesh=selectedMeshes, lyr=lyr)
             vecData(ret)
             # display the vector map of the selected time step
@@ -398,12 +398,12 @@ map2dServer <- function(id, cman) {
             } else {
                 aM <- cman$ugrids[[input$ncNames1[1]]]
                 ncVar1 <- aM$getVarName(input$ncVar1)
-                varAtt <- aM$atts[varName == ncVar1]
+                thisVar <- aM$vars[name == ncVar1]
                 ts1 <- paste0("At: ", aM$ts[as.integer(input$tsIdx1)])
                 lgT1 <- sprintf("%s (%s) [%s]",
-                                varAtt[grepl("long_name", name), val],
+                                thisVar[, long_name],
                                 ifelse(input$agg1 == "none", ts1, input$agg1),
-                                varAtt[grepl("unit", name), val])
+                                thisVar[, unit])
                 rsf <- rescale(sf::st_bbox(mdta1))
                 map1 <- genMap(pol=mdta1, field=input$ncVar1, n=input$nClass, style=input$clsStyle,
                                legendTitle=lgT1, mapId=session$ns("map1"), addControls=TRUE,
@@ -468,20 +468,20 @@ map2dServer <- function(id, cman) {
                     classInt::classIntervals(var=values, n=input$nClass, style=input$clsStyle)
                 aM1 <- cman$ugrids[[input$ncNames1[1]]]
                 ncVar1 <- aM1$getVarName(input$ncVar1)
-                varAtt1 <- aM1$atts[varName == ncVar1]
+                thisVar1 <- aM1$vars[name == ncVar1]
                 aM2 <- cman$ugrids[[ncNames2[1]]]
                 ncVar2 <- aM2$getVarName(input$ncVar2)
-                varAtt2 <- aM2$atts[varName == ncVar2]
+                thisVar2 <- aM2$vars[name == ncVar2]
                 ts1 <- paste0("At: ", aM1$ts[as.integer(input$tsIdx1)])
                 ts2 <- paste0("At: ", aM2$ts[as.integer(input$tsIdx2)])
                 lgT1 <- sprintf("%s (%s) [%s]",
-                                varAtt1[grepl("long_name", name), val],
+                                thisVar1[, long_name],
                                 ifelse(input$agg1 == "none", ts1, input$agg1),
-                                varAtt1[grepl("unit", name), val])
+                                thisVar1[, unit])
                 lgT2 <- sprintf("%s (%s) [%s]",
-                                varAtt2[grepl("long_name", name), val],
+                                thisVar2[, long_name],
                                 ifelse(input$agg2 == "none", ts2, input$agg2),
-                                varAtt2[grepl("unit", name), val])
+                                thisVar2[, unit])
                 map1 <- genMap(mdta1, field=input$ncVar1, valClass=valClass,
                                legendTitle=lgT1, mapId=session$ns("map1"), colPal=input$colPal,
                                continuous=input$continuous, reverse=input$colReverse)
@@ -756,18 +756,20 @@ map2dServer <- function(id, cman) {
             }
             aM <- cman$ugrids[[input$ncNames1[1]]]
             ncVar1 <- aM$getVarName(input$ncVar1)
-            varAtt <- aM$atts[varName == ncVar1]
+            ncVar2 <- ifelse(chkChr(input$ncVar2), aM$getVarName(input$ncVar2), ncVar1)
+            thisVar1 <- aM$vars[name == ncVar1]
+            thisVar2 <- aM$vars[name == ncVar2]
             ts1 <- aM$ts[as.integer(input$tsIdx)]
             ts2 <- aM$ts[as.integer(input$tsIdx2)]
             fids <- cman$tbl[hash %in% input$ncNames1, paste(hash, collapse = ",")]
             lgT1 <- sprintf("%s_%s_%s",
-                            varAtt[grepl("long_name", name), val],
+                            thisVar1[, long_name],
                             ifelse(input$agg1 == "none", ts1, input$agg1),
-                            varAtt[grepl("unit", name), val])
+                            thisVar1[, unit])
             lgT2 <- sprintf("%s_%s_%s",
-                            varAtt[grepl("long_name", name), val],
+                            thisVar2[, long_name],
                             ifelse(input$agg2 == "none", ts2, input$agg2),
-                            varAtt[grepl("unit", name), val])
+                            thisVar2[, unit])
             thisLabel <- session$ns("dlMapLabel")
             pid <- session$ns("")
             progress$set(value=0.7, message="Sending the task to a background process...")
