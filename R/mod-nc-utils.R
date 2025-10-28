@@ -343,7 +343,7 @@ addCases <- function(caseLst, cman, pattern=getOption("ugrid.pattern"),
             tbl[, crsid := crs[i]][, newCrsid := newCrs[i]][, ignoreFileCrs := ignoreCrsInFile[i]]
             tbl <- tbl[!hash %in% cman$tbl$hash]
             if (nrow(tbl) < 1) {
-                shiny::showNotification(paste("Nothing added. Files from:,", caseLst[i], "are already in the case table."))
+                shiny::showNotification(paste("Nothing added. Files from: ", caseLst[i], " are already in the case table."))
             } else {
                 if (initUgrid) {
                     nCores <- parallel::detectCores()
@@ -378,8 +378,8 @@ addCases <- function(caseLst, cman, pattern=getOption("ugrid.pattern"),
 
 addUgrid <- function(path, cman, overwrite=FALSE) {
 
-    if (!rlang::is_scalar_character(path)) {
-        message("path must be a single string.")
+    if (!path %in% cman$tbl$path) {
+        message("path is not found in the case table. Please add the case first")
         return(NULL)
     }
     chk <- isUgridNc(path)
@@ -401,6 +401,29 @@ addUgrid <- function(path, cman, overwrite=FALSE) {
     }
 
     invisible(cman$ugrids[[thisHash]])
+}
+
+addHis <- function(caseLst, cman) {
+
+    if (length(caseLst) != length(names(caseLst))) {
+        message("caseLst must be a named character vector / list.")
+        return(NULL)
+    }
+    hFiles <- sapply(caseLst, function (x) {
+        ret <- list.files(path=x, pattern="his\\.nc", ignore.case=TRUE, full.names=TRUE)[1]
+        ifelse(length(ret) < 0, NA_character_, ret)
+        })
+    tbl <- data.table::data.table(path=unlist(hFiles))
+    tbl[, caseName := names(caseLst)]
+    noHis <- tbl[is.na(path), caseName]
+    if (length(noHis) > 0)
+        warning("Following cases do not have _his.nc:\n\t- ", paste(noHis, collapse = "\n\t- "))
+    tbl <- tbl[!is.na(path)]
+    tbl[, hash := sapply(path, digest::digest)]
+    tbl <- tbl[!hash %in% cman$htbl$hash]
+    cman$htbl <- rbind(cman$htbl, tbl)
+    if (length(cman))
+    invisible(cman)
 }
 
 #' @keywords internal

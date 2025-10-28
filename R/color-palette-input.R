@@ -6,7 +6,7 @@
 getC4aTable <- function(
     type=c("all", "cat", "seq", "div", "cyc"),
     n=NULL, m=NULL, sort="name", series="all",
-    filters="none", range=NA, continuous=FALSE
+    filters="none", range=NA
 ) {
 
     type <- match.arg(type, several.ok=TRUE)
@@ -42,6 +42,7 @@ getC4aTable <- function(
         fullname = scoreTbl$fullname,
         palette = palColors
     )
+    palTbl[, revPalette := lapply(palette, rev)]
     return(palTbl)
 }
 
@@ -53,14 +54,14 @@ getC4aTable <- function(
 #' @param width Width of color blocks
 #' @param minWidth,maxWidth Minimum and maximum widths of the color gradient
 #' @keywords internal
-genPaletteContent <- function(
-        palTbl, continuous=FALSE, reverse=FALSE,
-        width="2em", minWidth="20em", maxWidth="40em") {
+genPaletteContent <- function(palTbl, continuous=FALSE, width="2em",
+                              minWidth="20em", maxWidth="40em", reverse=FALSE) {
 
     if (!is.data.table(palTbl))
         return(NULL)
+    pal <- data.table::copy(palTbl)
     if (isTRUE(reverse)) {
-        palTbl[, palette := lapply(palette, rev)]
+        pal[, palette := revPalette]
     }
     # css modified from cols4all
     css_col_norm <- paste0('border-radius: 0px; display: inline-block;',
@@ -74,7 +75,7 @@ genPaletteContent <- function(
                            minWidth, '; max-width: ', maxWidth,";"
                            )
     if (continuous ) {
-        palTbl[, content := paste0(
+        pal[, content := paste0(
                 '<div style="font-family: monospace;text-align:left;">',
                 fullname,
                 '<br><span style="',
@@ -84,15 +85,15 @@ genPaletteContent <- function(
                 ');text-align: c;" >&nbsp;</span></div>'
             ), by = .I]
     } else {
-        palTbl[, blocks := paste0('<span style="',
+        pal[, blocks := paste0('<span style="',
                                css_col_norm, 'background-color: ', unlist(palette), '"></span>',
                                collapse = ""
                         ), by = .I]
-        palTbl[, content := sprintf(
+        pal[, content := sprintf(
             '<div style="text-align:left;"><strong>%s</strong><br>%s</div>',
             fullname, blocks)]
     }
-    return(palTbl[, c("fullname", "content")])
+    return(pal[, c("fullname", "content")])
 }
 
 #' An modified version of `shinyWidgets::pickerInput`
@@ -112,7 +113,7 @@ colorPaletteInput <- function(
     ...) {
     palTbl <- getC4aTable(
         type=type, n=n,
-        continuous=continuous, filters=filters,
+        filters=filters,
         series=series, range=range
     )
     if (!is.data.table(palTbl)) {

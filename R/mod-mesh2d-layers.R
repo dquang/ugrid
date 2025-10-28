@@ -101,11 +101,12 @@ map2dLayerServer <- function(id, cman) {
                 filters=input$colFilters, series=input$colSeries
             )
         })
-        shiny::observeEvent(palTbl(), {
+        shiny::observe({
             updateColorPaletteInput(
-                inputId="colPal", reverse=input$colReverse, continuous=input$continuous,
+                inputId="colPal", continuous=input$continuous, reverse=input$colReverse,
                 selected=input$colPal, palTbl=palTbl())
-        })
+        }) |>
+            shiny::bindEvent(palTbl(), input$continuous, input$colReverse)
         frings <- shiny::reactive({
             selectedCases <- cman$cases[cman$cases %in% input$cases1]
             if (length(selectedCases) < 1) {

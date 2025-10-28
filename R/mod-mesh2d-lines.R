@@ -180,6 +180,7 @@ map2dLineServer <- function(id, cman) {
             aM <- cman$ugrids[[caseHashes[1]]]
             vName <- aM$getVarName(ncVar1)
             vUnit <- aM$vars[name == vName, unit]
+            isTime <- aM$vars[name == vName, hasTime]
             if (chkChr(vUnit))
                 yTitle <- paste0(ncVar1, " [", vUnit, "]")
             else
@@ -198,7 +199,7 @@ map2dLineServer <- function(id, cman) {
             }
             p <- plotly::plot_ly(data=tbl, type="scatter", mode="lines") |>
                 plotly::layout(xaxis=list(title="Chainage [m]"), yaxis=list(title=yTitle))
-            if (input$agg1 != "none") {
+            if (input$agg1 != "none" | !isTime) {
                 p <- plotly::add_lines(p, x=~sta, y=~value, name=paste0(ncVar1, " (", input$agg1, ")"))
             } else {
                 p <- plotly::add_lines(p, frame=~ts, x=~sta, y=~value, name=ncVar1) |>
@@ -245,7 +246,8 @@ map2dLineServer <- function(id, cman) {
                         mDim[2] <- as.integer(length(dta) / mDim[1] / mDim[3])
                     else
                         mDim[1] <- length(dta) / mDim[2]
-                    dta <- array(dta, dim=mDim)
+                    if (nDim > 0)
+                        dta <- array(dta, dim=mDim)
                     faces <- lapply(seq_along(lineMesh), function(j) lineMesh[[j]]$m2D$face2D)
                     faces <- do.call(rbind, faces)
                     if (is.na(sf::st_crs(faces)))
@@ -254,7 +256,7 @@ map2dLineServer <- function(id, cman) {
                         faces <- sf::st_transform(faces, 4326)
                     lineInt <- sf::st_intersects(lines, faces) |> unlist()
                     lineFaces <- faces[lineInt, ]
-                    lineDta <- if (nDim > 2) dta[, lineInt, ] else dta[lineInt, ]
+                    lineDta <- if (nDim > 2) dta[, lineInt, ] else if (nDim > 0) dta[lineInt, ] else dta[lineInt]
                     station <- calcStation(line=lines, pol=lineFaces)
                     dDim <- dim(lineDta)
                     ldta <- data.table::data.table(value=as.vector(lineDta))
@@ -262,9 +264,11 @@ map2dLineServer <- function(id, cman) {
                         ldta$lyr <- rep(1:dDim[1], times = dDim[2] * dDim[3])
                         ldta$sta <- rep(rep(station,  each = dDim[1]), times=dDim[3])
                         ldta$ts <- rep(aM$ts, each = dDim[1] * dDim[2])
-                    } else {
+                    } else if (nDim > 1) {
                         ldta$sta <- rep(station, dDim[2])
                         ldta$ts <- rep(aM$ts, each=dDim[1])
+                    } else {
+                        ldta$sta <- station
                     }
                     cman$lyrDta[[lname]] <- ldta
                 }

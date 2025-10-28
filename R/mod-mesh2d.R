@@ -138,7 +138,7 @@ map2dServer <- function(id, cman) {
                 shiny::showNotification("Please select a case first!")
                 return(NULL)
             }
-            feats <- cman$layer[cman$layer$fid %in% input$feats, ]
+            feats <- cman$layer[cman$layer$id %in% input$feats, ]
             if (isTRUE(nrow(feats) < 1)) {
                 shiny::showNotification("Please select at least one feature of interest first!")
                 return(NULL)
@@ -198,6 +198,7 @@ map2dServer <- function(id, cman) {
                     shiny::showNotification("Check input!")
                     return(NULL)
                 }
+                browser()
                 pols <- feats[grepl("POLYGON", feats$ftype, fixed=TRUE), ]
                 polsOverlap <- sf::st_overlaps(pols, fRings)
                 pRet <- list()
@@ -208,7 +209,7 @@ map2dServer <- function(id, cman) {
                 lineInt <- sf::st_intersects(lines, fRings)
                 lineRet <- list()
                 for (i in seq_along(lineInt)) {
-                    lineRet[[lines$fid[i]]] <- fRings$path[lineInt[[i]]]
+                    lineRet[[lines$id[i]]] <- fRings$path[lineInt[[i]]]
                 }
                 selectedPath <- c(polsOverlap, lineInt) |> unlist(use.names = FALSE) |> unique() |> sort()
                 selectedHash1 <- tbl[path %in% fRings$path[selectedPath] & caseName %in% input$cases1, hash]
@@ -230,11 +231,12 @@ map2dServer <- function(id, cman) {
                 filters=input$colFilters, series=input$colSeries
             )
         })
-        shiny::observeEvent(palTbl(), {
+        shiny::observe({
             updateColorPaletteInput(
-                inputId="colPal", reverse=input$colReverse, continuous=input$continuous,
+                inputId="colPal", continuous=input$continuous, reverse=input$colReverse,
                 selected=input$colPal, palTbl=palTbl())
-        })
+        }) |>
+            shiny::bindEvent(palTbl(), input$continuous, input$colReverse)
         vecData <- shiny::reactiveVal()
         shiny::observeEvent(input$genMapVector, {
             progress <- shiny::Progress$new()

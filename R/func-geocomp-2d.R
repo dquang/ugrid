@@ -586,14 +586,14 @@ genRaster4All <- function(mesh, variable="sea_surface_height", lyr=1L,
         if (chkChr(altitudeVar)) {
             bl <- lapply(mesh, function(x) x$getData4Face2D(variable=x$m2D$face$altitude, lyr=lyr))
             bl <- do.call(rbind, bl) |> as.vector()
-            dta <- abs(dta - bl)
-            dta[dta < 1e-7] <- NaN
+            dry <- abs(dta - bl) < 1e-9
+            dta[dry] <- NaN
         } else {
             warning("Altitude variable for faces was not found. Dry areas were not assigned as NaN.")
         }
     }
-    ncNames <- lapply(mesh, function(x) x$path) |> unlist() |> sort() |> paste(collapse = ";")
-    fpre <- digest::digest(ncNames)
+    ncPath <- lapply(mesh, function(x) x$path) |> unlist() |> sort() |> paste(collapse = ";")
+    fpre <- digest::digest(c(sort(ncPath), variable, lyr))
     pol2 <- terra::vect(pol)
     tempRast <- terra::rast(pol2, resolution=resolution, crs=terra::crs(pol2))
     nCores <- parallel::detectCores() %/% 2

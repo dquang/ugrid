@@ -16,3 +16,7 @@
 
 * remove `atts` out of `Ugrid` class attributes
 * solve the issue with velocity vector
+
+# ugrid 0.1.5
+
+* add a new module for working _his.nc

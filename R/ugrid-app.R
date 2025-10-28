@@ -214,7 +214,6 @@ uiResultLayer <- function() {
 
 appServer <- function(input, output, session) {
 
-    tmap::tmap_mode("view")
     # increasing max filesize to upload to 100Mb
     options(shiny.maxRequestSize=100*1024^2)
     options(ugrid.pattern="_map\\.nc$")
@@ -367,5 +366,6 @@ appServer <- function(input, output, session) {
 #'
 #' @export
 ugridApp <- function(...) {
+    tmap::tmap_mode("view")
     shiny::shinyApp(ui=appUi, server=appServer, ...)
 }

@@ -23,7 +23,7 @@ map2dCalcUi <- function(id) {
                                                      choices="", multiple=TRUE, autoSelectFirstOption=TRUE),
                     shiny::selectInput(ns("ncVar1"), "Variable", choices=""),
                     shinyWidgets::prettySwitch(ns("dryAsNa"), "For water level, treat dry as NaN", value=TRUE),
-                    shiny::sliderInput(ns("lyr"), "Select a layer", min=1L, max=10L, value=1L, sep=1L),
+                    shiny::sliderInput(ns("lyr"), "Select a layer", min=1L, max=10L, value=1L, step=1L, pre="Layer "),
                     shiny::selectizeInput(ns("tsIdx1"), "Time step", choices=""),
                     shiny::radioButtons(ns("agg1"), "Aggregation method",
                                         choices=c("none", "min", "max", "mean"), inline=TRUE),
@@ -125,11 +125,12 @@ map2dCalcServer <- function(id, cman) {
                 filters=input$colFilters, series=input$colSeries
             )
         })
-        shiny::observeEvent(palTbl(), {
+        shiny::observe({
             updateColorPaletteInput(
-                inputId="colPal", reverse=input$colReverse, continuous=input$continuous,
+                inputId="colPal", continuous=input$continuous, reverse=input$colReverse,
                 selected=input$colPal, palTbl=palTbl())
-        })
+        }) |>
+            shiny::bindEvent(palTbl(), input$continuous, input$colReverse)
         mapData1 <- shiny::reactive({
             ncNames1 <- input$ncNames1[nchar(input$ncNames1) > 0]
             agg1 <- input$agg1
@@ -163,7 +164,9 @@ map2dCalcServer <- function(id, cman) {
             if (length(selectedMeshes) < 1)
                 return(NULL)
             dryAsNa <- isTRUE(input$dryAsNa)
-            meshLst <- getMapData(mesh=selectedMeshes, variable=ncVar2, tsIdx=tsIdx2, agg=agg2, dryAsNa=dryAsNa)
+            lyr <- input$lyr
+            meshLst <- getMapData(mesh=selectedMeshes, variable=ncVar2,
+                                  tsIdx=tsIdx2, agg=agg2, dryAsNa=dryAsNa, lyr=lyr)
             polLst <- list()
             for (i in seq_along(meshLst)) {
                 polLst[[i]] <- data.table::data.table(meshLst[[i]]$ret)
@@ -178,7 +181,6 @@ map2dCalcServer <- function(id, cman) {
         calculatedRaster <- shiny::reactive({
 
             ncVar2 <- if (chkChr(input$ncVar2)) input$ncVar2 else input$ncVar1
-
             mdta1 <- mapData1()
             mdta2 <- mapData2()
             if (!is(mdta1, "sf") | !is(mdta2, "sf"))
@@ -301,8 +303,7 @@ map2dCalcServer <- function(id, cman) {
         shiny::observeEvent(input$genAll, {
             ncVar1 <- input$ncVar1
             ncNames1 <- input$ncNames1[nchar(input$ncNames1) > 0]
-            ncCases1 <- input$cases1
-            chk <- chkChr(ncVar1) & (length(ncNames1) > 0) & chkChr(ncCases1)
+            chk <- chkChr(ncVar1) & (length(ncNames1) > 0)
             if (!chk) {
                 shiny::showNotification("Check input!")
                 return(NULL)
@@ -321,8 +322,10 @@ map2dCalcServer <- function(id, cman) {
             shinyjs::hide(id="map2d-cmp-card")
             tmpFolder <- rasters$tmpFolder
             dryAsNa <- isTRUE(input$dryAsNa)
+            lyr <- input$lyr
             promises::future_promise(
-                expr=ugrid::genRaster4All(mesh=selectedMeshes, variable=ncVar1, folder=tmpFolder, dryAsNa=dryAsNa),
+                expr=ugrid::genRaster4All(mesh=selectedMeshes, variable=ncVar1, lyr=lyr,
+                                          folder=tmpFolder, dryAsNa=dryAsNa),
                 seed=TRUE
             ) |>
                 promises::then(
@@ -474,6 +477,12 @@ map2dCalcServer <- function(id, cman) {
             aM <- addUgrid(path=cman$tbl[hash == sampleHash, path], cman=cman)
             ncVars <- aM$m2D$face
             ncVars <- ncVars[!ncVars %in% unlist(aM$m2D$topo)]
+            if (any(aM$vars[!is.na(ndims), ndims > 2])) {
+                shinyjs::show("lyr")
+                shiny::updateSliderInput(inputId="lyr", max=aM$dims[name == aM$m2D$topo$layer_dimension, length])
+            } else {
+                shinyjs::hide("lyr")
+            }
             shiny::updateSelectInput(inputId="ncVar1", choices=names(ncVars))
             if (length(aM$totalTs) > 0) {
                 tsIds <- seq.int(1, aM$totalTs, 1)
@@ -506,6 +515,12 @@ map2dCalcServer <- function(id, cman) {
             aM <- addUgrid(path=cman$tbl[hash == sampleHash, path], cman=cman)
             ncVars <- aM$m2D$face
             ncVars <- ncVars[!ncVars %in% unlist(aM$m2D$topo)]
+            if (any(aM$vars[!is.na(ndims), ndims > 2])) {
+                shinyjs::show("lyr")
+                shiny::updateSliderInput(inputId="lyr", max=aM$dims[name == aM$m2D$topo$layer_dimension, length])
+            } else {
+                shinyjs::hide("lyr")
+            }
             shiny::updateSelectInput(inputId="ncVar2", choices=names(ncVars))
             if (length(aM$totalTs) > 0) {
                 tsIds <- seq.int(1, aM$totalTs, 1)
