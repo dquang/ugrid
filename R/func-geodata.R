@@ -4,18 +4,31 @@
 #' and convert it to a sf LINESTRING.
 #'
 #' @param path Path to the .pli file (only x, y)
-#' @param crs Coordinate system of the polyline
+#' @param crs Coordinate system of the polyline, eg. crs = "EPSG:25833"
+#' @return sf_linestring
 #' @export
+#' @examples
+#' # read .pli file
+#' # with cross sections of Elbe river (x and y)
+#' file <- system.file("testdata/Obs_cross_sections01_crs.pli", package = "ugrid")
+#' # read without crs, CRS attribute is NA
+#' readPli(file)
+#' # read with crs, CRS attribute has value
+#' readPli(file, crs = "EPSG:25833")
+#' # read .pliz file with kribben and kade (x y z)
+#' file <- system.file("testdata/Buhnen_Deiche_v02_fxw.pliz", package="ugrid")
+#' readPli(file, crs = "EPSG:25833")
+#'
 readPli <- function(path, crs=sf::NA_crs_) {
 
     if (!file.exists(path)) {
-        warnings("File not found: ", path)
+        warning("File not found: ", path)
         return(NULL)
     }
     tbl <- fread(file=path, sep="\n", header=FALSE, blank.lines.skip=TRUE)
     tbl <- tbl[!grepl("^\\*", V1)]
     if (nrow(tbl) < 4) {
-        warnings("Not enough information in the file: ", path)
+        warning("Not enough information in the file: ", path)
         return(NULL)
     }
     tbl[, V1 := stringi::stri_trim_both(V1)][, V1 := stringi::stri_replace_all_regex(V1, " +", " ")]
