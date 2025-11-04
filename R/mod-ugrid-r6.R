@@ -547,8 +547,9 @@ Ugrid <- R6::R6Class(
             self$readDomainInfo()
             self$m2D$face2D <- facePolygon
             if (length(self$m2D$fids) > 0) {
-                facePolygon <- facePolygon[self$m2D$fids, ] |>
-                    sf::st_union() |> sf::st_as_sf()
+                facePolygon <- sf::st_make_valid(facePolygon[self$m2D$fids, ]) |>
+                    sf::st_union() |>
+                    sf::st_as_sf()
                 sf::st_geometry(facePolygon) <- "geometry"
                 facePolygon$path <- self$path
                 self$m2D$fRing <- facePolygon

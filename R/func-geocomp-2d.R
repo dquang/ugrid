@@ -306,7 +306,7 @@ squash2Bbox <- function(geom, toBb=c(-37, -44, -16, -30), rsf=NULL) {
     } else if ("polygon_id" %in% colNames) {
         ret <- sfheaders::sf_polygon(
             geomDf, x="x", y="y",
-            polygon_id = "polygon_id", linestring_id="linestring_id")
+            polygon_id = "polygon_id", linestring_id="linestring_id", close=FALSE)
         ret$polygon_id <- NULL
     } else if ("linestring_id" %in% colNames) {
         ret <- sfheaders::sf_linestring(

@@ -272,7 +272,7 @@ bb2Pol <- function(bb, id="bb1", crs=sf::st_crs()) {
         y=c(bb[["ymin"]], bb[["ymin"]], bb[["ymax"]], bb[["ymax"]]),
         pid=rep(id, 4)
     ) |>
-        sfheaders::sf_polygon(x="x", y="y", linestring_id="pid", polygon_id="pid")
+        sfheaders::sf_polygon(x="x", y="y", linestring_id="pid", polygon_id="pid", close=FALSE)
     sf::st_crs(pol) <- crs
     return(pol)
 }

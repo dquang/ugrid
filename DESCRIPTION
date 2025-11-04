@@ -1,8 +1,10 @@
 Package: ugrid
 Title: Postprocessing for NetCDF-Data in UGRID-Format
 Version: 0.1.5
-Authors@R: 
-    person("Quang", "Duong", , "duong@bafg.de", role = c("aut", "cre"))
+Authors@R: c(
+    person("Quang", "Duong", , "duong@bafg.de", role = c("aut", "cre")),
+    person("Asta", "Kunkel", role = "ctb")
+  )
 Description: An R package for post-processing model outputs stored in NetCDF files following the UGRID convention.
     While it is primarily designed to handle results from Delft3D-FM, it can be used with any UGRID-compliant NetCDF dataset.
     The data are encapsulated in an R6 object, where the 2D mesh is represented as a polygon layer,

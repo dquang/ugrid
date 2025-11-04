@@ -20,3 +20,4 @@
 # ugrid 0.1.5
 
 * add a new module for working _his.nc
+* fix errors with TopologyException while creating domain rings.
