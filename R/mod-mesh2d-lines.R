@@ -102,6 +102,7 @@ map2dLineServer <- function(id, cman) {
                     meshes <- foreach::foreach(aH=toBuildPoly, .combine=c) %dopar% {
                         aM <- Ugrid$new(tbl[hash==aH, path], crs=tbl[hash==aH, crsid])
                         aM$buildFace2DPoly()
+                        aM$buildEdge1DLine()
                         ret <- list(aM)
                         names(ret) <- aH
                         ret
@@ -122,18 +123,37 @@ map2dLineServer <- function(id, cman) {
             pol <- do.call(rbind, polLst) |>
                 sf::st_cast("MULTIPOLYGON") |>
                 sf::st_cast("POLYGON", group_or_split = TRUE)
-            if (is.na(sf::st_crs(pol)))
+            lineLst <- lapply(hashes, function(x) {
+                line <- cman$ugrids[[x]]$m1D$line1D
+                if (!inherits(line, "sf"))
+                    return(NULL)
+                line$caseName <- tbl[hash == x, caseName]
+                line$label <- basename(cman$ugrids[[x]]$path)
+                line$hash <- x
+                line
+            })
+            line1D <- do.call(rbind, lineLst)
+            if (is.na(sf::st_crs(pol))) {
                 pol <- squash2Bbox(pol)
-            else
+                if (inherits(line1D, "sf"))
+                    line1D <- squash2Bbox(line1D)
+            } else {
                 pol <- sf::st_transform(pol, 4326)
-            return(pol)
+                if (inherits(line1D, "sf"))
+                    line1D <- sf::st_transform(line1D, 4326)
+            }
+
+            return(list(ring=pol, line1D=line1D))
         })
         shiny::observeEvent(input$genOverview, {
-            pol <- frings()
+            pol <- frings()$ring
+            line1D <- frings()$line1D
             map <- mapgl::maplibre(bounds=pol) |>
                 mapgl::add_fill_layer(id="domains", source=pol, tooltip="label",
                                       fill_color="#002B54", fill_opacity=0.5) |>
                 mapgl::add_draw_control(download_button=TRUE)
+            if (inherits(line1D, "sf"))
+                map <- mapgl::add_line_layer(map, id="line1D", source=line1D, line_color="#8E4454", tooltip="label")
             if (inherits(cman$layer, "sf")) {
                 lines <- cman$layer[grepl("LINE", cman$layer$ftype), ]
                 if (nrow(lines) > 0) {
@@ -216,7 +236,7 @@ map2dLineServer <- function(id, cman) {
                 shiny::showNotification("Please select only one case first!")
                 return(NULL)
             }
-            fRing <- frings()
+            fRing <- frings()$ring
             lines <- cman$layer[cman$layer$id %in% input$feats, ]
             if (!isTRUE(nrow(lines) > 0)){
                 shiny::showNotification("Please select a line for calculation. Did you upload or draw some?")
