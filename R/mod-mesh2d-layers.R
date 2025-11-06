@@ -262,9 +262,10 @@ map2dLayerServer <- function(id, cman) {
             caseHashes <- cman$tbl[caseName %in% input$cases1 & hash %in% names(cman$ugrids), hash]
             aM <- cman$ugrids[[caseHashes[1]]]
             vName <-  aM$getVarName(ncVar1)
-            ncUnit1 <- aM$vars[name == vName, unit]
+            varTbl <- aM$vars[name == vName]
+            varTbl[!is.na(unit), long_name := paste0(long_name, " [", unit,"]")]
             tsName <- aM$ts
-            legendTitle <- paste0(ncVar1, " [", ncUnit1,"]")
+            legendTitle <- varTbl$long_name
             shinyjs::hide(id="map2d-card")
             shinyjs::show(id="map2d-line-plot")
             g <- genContourFacets(
@@ -293,12 +294,16 @@ map2dLayerServer <- function(id, cman) {
             ncVars <- aM$m2D$layer
             ncVars <- ncVars[!ncVars %in% unlist(aM$m2D$topo)]
             ncVars <- ncVars[ncVars %in% aM$vars[hasTime==TRUE, name]]
+            ncVars <- data.table(name=unlist(ncVars), choice=names(ncVars))
+            ncVars <- merge(ncVars, aM$vars[, c("name", "long_name")], by="name")
+            varChoices <- ncVars$choice
+            names(varChoices) <- ncVars$long_name
             if (length(ncVars) < 1) {
                 shiny::showNotification("Found no variables for layers in case: ", input$cases1, type="error")
                 shinyjs::hide("lyr")
                 return(NULL)
             }
-            shiny::updateSelectInput(inputId="ncVar1", choices=names(ncVars))
+            shiny::updateSelectInput(inputId="ncVar1", choices=varChoices)
             shinyjs::show("lyr")
             shiny::updateSliderInput(inputId="lyr", max=aM$dims[name == aM$m2D$topo$layer_dimension, length])
             if (length(aM$totalTs) > 0) {

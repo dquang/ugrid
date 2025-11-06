@@ -217,6 +217,9 @@ appServer <- function(input, output, session) {
     # increasing max filesize to upload to 100Mb
     options(shiny.maxRequestSize=100*1024^2)
     options(ugrid.pattern="_map\\.nc$")
+    sampleCases <- list.files(system.file("testdata/d3dfm/", package="ugrid"), full.names=TRUE)
+    ctbl <- rbind(ctbl, data.table(caseName=paste0("Example_", basename(sampleCases)),
+                                   casePath=sampleCases))
     if (!exists("cman")) {
         cman <- initCaseManager()
     }

@@ -1,23 +1,28 @@
 # ugrid 0.1.2
 
-* Finalizing Ugrid-App.
+* Finalized Ugrid-App.
 
 # ugrid 0.1.3
 
-* Simplifying layer module (3D-Result Tab).
+* Simplified layer module (3D-Result Tab).
 
 # ugrid 0.1.4
 
-* Reorganize ugridApp layout
-* Correct the behavior with *dry areas*
-* Add CODE OF CONDUCT
+* Reorganized ugridApp layout
+* Corrected the behavior with *dry areas*
+* Added CODE OF CONDUCT
 
 # ugrid 0.1.4.1
 
-* remove `atts` out of `Ugrid` class attributes
-* solve the issue with velocity vector
+* removed `atts` out of `Ugrid` class attributes
+* solved the issue with velocity vector
 
 # ugrid 0.1.5
 
-* add a new module for working _his.nc
-* fix errors with TopologyException while creating domain rings.
+* added a new module for working _his.nc
+* fixed errors with TopologyException while creating domain rings.
+
+# ugrid 0.1.5.1
+
+* added some Deflt3D-FM test data
+* changed displayed names of variables to long_name.

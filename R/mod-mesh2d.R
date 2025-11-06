@@ -564,13 +564,17 @@ map2dServer <- function(id, cman) {
             aM <- addUgrid(path=cman$tbl[hash == sampleHash, path], cman=cman)
             ncVars <- aM$m2D$face
             ncVars <- ncVars[!ncVars %in% unlist(aM$m2D$topo)]
+            ncVars <- data.table(name=unlist(ncVars), choice=names(ncVars))
+            ncVars <- merge(ncVars, aM$vars[, c("name", "long_name")], by="name")
+            varChoices <- ncVars$choice
+            names(varChoices) <- ncVars$long_name
             if (any(aM$vars[!is.na(ndims), ndims > 2])) {
                 shinyjs::show("lyr")
                 shiny::updateSliderInput(inputId="lyr", max=aM$dims[name == aM$m2D$topo$layer_dimension, length])
             } else {
                 shinyjs::hide("lyr")
             }
-            shiny::updateSelectInput(inputId="ncVar1", choices=names(ncVars))
+            shiny::updateSelectInput(inputId="ncVar1", choices=varChoices)
             if (length(aM$totalTs) > 0) {
                 tsIds <- seq.int(1, aM$totalTs, 1)
                 names(tsIds) <- aM$ts
@@ -586,7 +590,7 @@ map2dServer <- function(id, cman) {
                                                    value=hash, group_by=caseName, alias=path)
             shinyWidgets::updateVirtualSelect(inputId="ncNames1", choices=ncLst)
             if (!chkChr(input$cases2)) {
-                shiny::updateSelectInput(inputId="ncVar2", choices=names(ncVars))
+                shiny::updateSelectInput(inputId="ncVar2", choices=varChoices)
                 shinyWidgets::updateVirtualSelect(inputId="ncNames2", choices=ncLst)
             }
             progress$set(value=0.9, message="Done.")
@@ -605,7 +609,11 @@ map2dServer <- function(id, cman) {
             aM <- addUgrid(path=cman$tbl[hash == sampleHash, path], cman=cman)
             ncVars <- aM$m2D$face
             ncVars <- ncVars[!ncVars %in% unlist(aM$m2D$topo)]
-            shiny::updateSelectInput(inputId="ncVar2", choices=names(ncVars))
+            ncVars <- data.table(name=unlist(ncVars), choice=names(ncVars))
+            ncVars <- merge(ncVars, aM$vars[, c("name", "long_name")], by="name")
+            varChoices <- ncVars$choice
+            names(varChoices) <- ncVars$long_name
+            shiny::updateSelectInput(inputId="ncVar2", choices=varChoices)
             if (any(aM$vars[!is.na(ndims), ndims > 2])) {
                 shinyjs::show("lyr")
                 shiny::updateSliderInput(inputId="lyr", max=aM$dims[name == aM$m2D$topo$layer_dimension, length])
@@ -624,7 +632,7 @@ map2dServer <- function(id, cman) {
                                                    value=hash, group_by=caseName, alias=path)
             shinyWidgets::updateVirtualSelect(inputId="ncNames2", choices=ncLst)
             if (!chkChr(input$cases1)) {
-                shiny::updateSelectInput(inputId="ncVar1", choices=names(ncVars))
+                shiny::updateSelectInput(inputId="ncVar1", choices=varChoices)
                 shinyWidgets::updateVirtualSelect(inputId="ncNames1", choices=ncLst)
             }
             progress$set(value=0.9, message="Done.")

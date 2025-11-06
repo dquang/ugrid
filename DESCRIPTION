@@ -1,6 +1,6 @@
 Package: ugrid
 Title: Postprocessing for NetCDF-Data in UGRID-Format
-Version: 0.1.5
+Version: 0.1.5.1
 Authors@R: c(
     person("Quang", "Duong", , "duong@bafg.de", role = c("aut", "cre")),
     person("Asta", "Kunkel", role = "ctb")
@@ -26,7 +26,6 @@ Suggests:
 Imports: 
     akima,
     bslib,
-    cicerone,
     classInt,
     cols4all,
     data.table,
@@ -48,14 +47,7 @@ Imports:
     stringi,
     terra, 
     leaflet, 
-    leaflet.providers, 
-    leaflet.extras,
-    stars,
-    openxlsx, 
-    geometa,
     foreach,
     doParallel, 
-    gstat, 
-    viridis, 
     future, 
     tmap

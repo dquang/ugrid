@@ -199,13 +199,10 @@ map2dLineServer <- function(id, cman) {
             caseHashes <- cman$tbl[caseName %in% input$cases1 & hash %in% names(cman$ugrids), hash]
             aM <- cman$ugrids[[caseHashes[1]]]
             vName <- aM$getVarName(ncVar1)
-            vUnit <- aM$vars[name == vName, unit]
-            isTime <- aM$vars[name == vName, hasTime]
-            if (chkChr(vUnit))
-                yTitle <- paste0(ncVar1, " [", vUnit, "]")
-            else
-                yTitle <- ncVar1
-
+            varTbl <- aM$vars[name == vName]
+            varTbl[!is.na(unit), long_name := paste0(long_name, " [", unit, "]")]
+            isTime <- varTbl[, hasTime]
+            yTitle <- varTbl$long_name
             if ("lyr" %in% colnames(tbl))
                 tbl <- tbl[lyr == input$lyr][, lyr := NULL]
             if (nrow(tbl[!is.na(value)]) < 1) {
@@ -220,9 +217,9 @@ map2dLineServer <- function(id, cman) {
             p <- plotly::plot_ly(data=tbl, type="scatter", mode="lines") |>
                 plotly::layout(xaxis=list(title="Chainage [m]"), yaxis=list(title=yTitle))
             if (input$agg1 != "none" | !isTime) {
-                p <- plotly::add_lines(p, x=~sta, y=~value, name=paste0(ncVar1, " (", input$agg1, ")"))
+                p <- plotly::add_lines(p, x=~sta, y=~value, name=paste0(yTitle, " (", input$agg1, ")"))
             } else {
-                p <- plotly::add_lines(p, frame=~ts, x=~sta, y=~value, name=ncVar1) |>
+                p <- plotly::add_lines(p, frame=~ts, x=~sta, y=~value, name=yTitle) |>
                     plotly::animation_slider(currentvalue=list(prefix="Timestep", visible=TRUE,
                                                                font=list(color="red"))) |>
                     plotly::animation_opts(easing="bounce-in", frame = 500)
@@ -309,12 +306,16 @@ map2dLineServer <- function(id, cman) {
             aM <- addUgrid(path=cman$tbl[hash == sampleHash, path], cman=cman)
             ncVars <- aM$m2D$face
             ncVars <- ncVars[!ncVars %in% unlist(aM$m2D$topo)]
+            ncVars <- data.table(name=unlist(ncVars), choice=names(ncVars))
+            ncVars <- merge(ncVars, aM$vars[, c("name", "long_name")], by="name")
+            varChoices <- ncVars$choice
+            names(varChoices) <- ncVars$long_name
             if (any(aM$vars$ndims > 2)) {
                 shinyjs::show("lyr")
                 nLyr <- aM$dims[name == aM$m2D$topo$layer_dimension, as.integer(length)]
                 shiny::updateSliderInput(inputId="lyr", max=nLyr)
             }
-            shiny::updateSelectInput(inputId="ncVar1", choices=names(ncVars))
+            shiny::updateSelectInput(inputId="ncVar1", choices=varChoices)
             if (length(aM$totalTs) > 0) {
                 tsIds <- seq.int(1, aM$totalTs, 1)
                 names(tsIds) <- aM$ts
