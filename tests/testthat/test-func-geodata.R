@@ -30,13 +30,13 @@ test_that("readPli", {
     # pliz file
     file <- system.file("testdata/Buhnen_Deiche_v02_fxw.pliz", package="ugrid")
     objxyz <- readPli(file,  crs = "EPSG:25833")
-    expect_equal(dim(objxyz), c(3397,2))
+    expect_equal(dim(objxyz), c(74,2))
     expect_true(inherits(objxyz, what = "sf"))
 
     allcoords <- sf::st_coordinates(objxyz)
-    getc <- allcoords[which(allcoords[,"L1"]==which(objxyz[[1]]=="ID_577999_li:type=kribben")),c("X", "Y", "Z")]
-    # coordinates of ID_577999_li:type=kribben from file
-    oric <- matrix(c(1.965363800000000E+005 , 1.965786200000000E+005, 5.925847070000000E+006,5.925871820000000E+006,4.010000000000000E+000, 4.010000000000000E+000), nrow = 2, dimnames=list(c(), c("X", "Y", "Z")))
+    getc <- allcoords[which(allcoords[,"L1"]==which(objxyz[[1]]=="Nr_re_24:type=kribben")),c("X", "Y", "Z")]
+    # coordinates of Nr_re_24:type=kribben from file
+    oric <- matrix(c(2.486647558610054E+005,  2.486707301124556E+005, 5.894438098527372E+006,  5.894434326580151E+006,  1.161600000000000E+001,  1.257200000000000E+001), nrow = 2, dimnames=list(c(), c("X", "Y", "Z")))
     expect_equal(getc, oric)
 
 })
