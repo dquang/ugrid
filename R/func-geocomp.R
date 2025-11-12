@@ -8,11 +8,12 @@ findFaces <- function(x, mesh) {
     stopifnot(inherits(x, "sf"))
     stopifnot(inherits(mesh, "Ugrid"))
     xtype <- sf::st_geometry_type(x)
-    mesh$buildFace2DPoly()
+    pol <- mesh$buildFace2DPoly() |>
+        sf::st_make_valid()
     if (grepl("POINT", xtype)) {
-        ret <- sf::st_intersects(x, mesh$m2D$face2D) |> unlist()
+        ret <- sf::st_intersects(x, pol) |> unlist()
     } else if (grepl("LINE", xtype)) {
-        ret <- sf::st_crosses(x, mesh$m2D$face2D) |> unlist()
+        ret <- sf::st_crosses(x, pol) |> unlist()
     } else {
         ret <- NULL
     }
@@ -20,7 +21,6 @@ findFaces <- function(x, mesh) {
     return(ret)
 }
 
-#' @keywords internal
 calcFaceStations <- function(faces, mesh) {
 
     faces <- unlist(faces)
@@ -34,27 +34,24 @@ calcFaceStations <- function(faces, mesh) {
     return(ret)
 }
 
-#' @keywords internal
-calcIsolineData <- function(depth, station, dta, tsName=NULL) {
+calcIsolineData <- function(dta, tsName=NULL) {
 
-    xyz <- expand.grid(y=depth, x=station / 1000)
-    dims <- dim(dta)
-    if (length(tsName) != dims[3])
-        tsName <- seq_len(dims[3])
+    tsVec <- unique(dta$ts)
+    nTs <- length(unique(dta$ts))
+    if (length(tsName) != nTs)
+        tsName <- tsVec
+    data.table::setorder(dta, ts, lyr, sta)
     nCores <- parallel::detectCores()
     doParallel::registerDoParallel(cores = parallel::detectCores() - 1)
     `%dopar%` <- foreach::`%dopar%`
-    retLst <- foreach::foreach(i=1:dims[3], .combine=rbind) %dopar% {
-        xyz$z <- as.vector(dta[, , i])
+    retLst <- foreach::foreach(i=1:nTs, .combine=rbind) %dopar% {
+        xyz <- dta[ts == tsVec[i] & !is.na(value), list(x = sta / 1000, y = depth, z = value)]
         if (length(xyz$z[!is.na(xyz$z)]) < 5)
             return(NULL)
-        xyz$z  <- data.table::nafill(xyz$z, type="nocb")
-        xyz$z  <- data.table::nafill(xyz$z,  type="locf")
         interpTbl <- akima::interp(x=xyz$x, y=xyz$y, z=xyz$z, duplicate="mean")
         tbl <- expand.grid(x = interpTbl$x, y = interpTbl$y)
         tbl$z <- as.vector(interpTbl$z)
-        tbl$z  <- data.table::nafill(tbl$z, type="nocb")
-        tbl$z  <- data.table::nafill(tbl$z,  type="locf")
+        tbl <- data.table::as.data.table(tbl)
         tbl$tsIdx <- tsName[i]
         tbl
     }
@@ -62,7 +59,6 @@ calcIsolineData <- function(depth, station, dta, tsName=NULL) {
     return(tbl)
 }
 
-#' @keywords internal
 genContourGif <- function(tbl, fps=12, fname=tempfile(fileext=".gif"), xRange=c(0, 65), xReverse=TRUE,
                           xName="Distance from Brünsbuttel [km]",
                           yName="Depth [m]",
@@ -107,7 +103,6 @@ genContourGif <- function(tbl, fps=12, fname=tempfile(fileext=".gif"), xRange=c(
     gganimate::anim_save(filename=fname, animation=ga)
 }
 
-#' @keywords internal
 genContourFacets <- function(tbl, tsIds, xRange=c(0, 65), xReverse=FALSE,
                           xName="Distance from Brünsbuttel [km]",
                           yName="Depth [m]",
@@ -130,8 +125,9 @@ genContourFacets <- function(tbl, tsIds, xRange=c(0, 65), xReverse=FALSE,
     else
         xaxis <- ggplot2::scale_x_continuous(limits=sort(xRange, TRUE), n.breaks=10)
     values <- tbl[x %between% xRange, unique(z)]
-    if (!is.null(fixedClass))
+    if (chkChr(fixedClass)) {
         brks <- txt2NumVec(fixedClass)
+    }
     else {
         valClass <- tryCatch(classInt::classIntervals(var=values, n=nClass, style=style),
                              error=function(e) message(e))
@@ -151,10 +147,8 @@ genContourFacets <- function(tbl, tsIds, xRange=c(0, 65), xReverse=FALSE,
     return(g)
 }
 
-#' @keywords internal
-calcStation <- function(line, pol){
+calcStation <- function(lineSec){
 
-    lineSec <- sf::st_intersection(line, pol)
     secMidpts <- sf::st_centroid(lineSec)
     secLength <- sf::st_length(lineSec)
     secSta <- (secLength[-length(secLength)] + secLength[-1]) / 2

@@ -92,6 +92,7 @@ getData4Sf <- function(
                       tsIdx=tsIdx, agg=agg, lyr=lyr, onlyMain=onlyMain)
     pol <- lapply(mesh, function(x) x$ret)
     pol <- do.call(rbind, pol)
+    pol <- sf::st_make_valid(pol)
     xtype <- sf::st_geometry_type(x)
     if (grepl("POINT|POLYGON", xtype)) {
         pred <- sf::st_intersects(x, pol) |> unlist()
@@ -125,7 +126,7 @@ getFaceData4Var <- function(mesh, variable, lyr="all") {
         message("Check variable. Nc variables for ", variable,": ", paste0(ncVar, collapse=", "))
         return(NULL)
     }
-    woDta <- sapply(mesh, function(x) is.null(x$data2D[[variable]]))
+    woDta <- sapply(mesh, function(x) is.null(x$data2D$face[[variable]]))
     woMesh <- mesh[woDta]
     wiMesh <- mesh[!woDta]
     if (length(woMesh) %between% c(1, 4)) {
@@ -196,7 +197,6 @@ genIsoline <- function(x, field, resolution=10, nbin=10,
     return(contours)
 }
 
-#' @keywords internal
 poly2Raster <- function(pol, field, resolution=NULL, to4326=TRUE) {
 
     if (!inherits(pol, "sf")) {
@@ -250,7 +250,6 @@ rescale <- function(fromBb,
     return(list(fx=fx, fy=fy, fd=fd))
 }
 
-#' @keywords internal
 rescale2 <- function(x, toBb=c(-37, -44, -16, -30)){
 
     chk <- inherits(x, "sf") | inherits(x, "SpatRaster") | inherits(x, "SpatVector")
@@ -412,7 +411,6 @@ genVectorLayer <- function(
     return(ret)
 }
 
-#' @keywords internal
 genVector4All <- function(
         mesh, lyr=1L, baseLength=NULL, aRatio = 0.2, aOpen=30, aSide=2,
         fillValue=NULL) {
@@ -463,7 +461,6 @@ genVector4All <- function(
     return(retLst)
 }
 
-#' @keywords internal
 genVector4One <- function(faceX, faceY, ucmag, ucx, ucy, baseLength, aRatio=0.2, aOpen=30, aSide=2,
                           crs=NA, newCrs=NA, tf=FALSE, fillValue=NULL) {
 
@@ -509,7 +506,6 @@ genVector4One <- function(faceX, faceY, ucmag, ucx, ucy, baseLength, aRatio=0.2,
     return(ret)
 }
 
-#' @keywords internal
 calcDirection <- function(dx, dy, fillValue=-999.0) {
 
     chk <- isTRUE(dx == fillValue) | isTRUE(dy == fillValue) | !chkDbl(dx) | !chkDbl(dy)
@@ -523,40 +519,6 @@ calcDirection <- function(dx, dy, fillValue=-999.0) {
         ret <- 2 * pi - ret
     ret <- 180 * ret / pi
     ret
-}
-
-#' Split features of a linestring to segments with exact two points.
-#' @param x an sf_linestring
-#' @keywords internal
-line2Segments <- function(x) {
-
-    if (!is(x, "sf"))
-        return(NULL)
-    tbl <- sf::st_coordinates(x) |> data.table::as.data.table()
-    hasZ <- "Z" %in% colnames(tbl)
-    tbl[, grp := seq.int(1, .N), by=L1]
-    tbl[, lid := paste(L1, grp, sep="_")]
-    tbl[, X2 := shift(X, type="lead")][, Y2 := shift(Y, type="lead")]
-    if (hasZ)
-        tbl[, Z2 := shift(Z, type="lead")]
-    col1 <- grep("2", colnames(tbl), value=TRUE, invert=TRUE) |> sort()
-    col2 <- grep("grp|L1|lid|2", colnames(tbl), value=TRUE) |> sort()
-    tbl2 <- tbl[-.N, .SD, .SDcols = col2]
-    tbl1 <- tbl[-.N, .SD, .SDcols = col1]
-    data.table::setnames(tbl2, col2, col1)
-    tbl <- rbind(tbl1, tbl2)
-    setorder(tbl, L1, grp)
-    tbl[, grp := NULL]
-    xdta <- sf::st_drop_geometry(x)
-    xdta$L1 <- 1:nrow(x)
-    tbl <- merge(tbl, xdta, by="L1")
-    if (hasZ)
-        ret <- sfheaders::sf_linestring(tbl, x="X", y="Y", z="Z", linestring_id="lid", keep=TRUE)
-    else
-        ret <- sfheaders::sf_linestring(tbl, x="X", y="Y", linestring_id="lid", keep=TRUE)
-    sf::st_crs(ret) <- sf::st_crs(x)
-
-    return(ret)
 }
 
 #' Generate value rasters of one variable for all time steps

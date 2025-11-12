@@ -1,5 +1,4 @@
-#' Shiny module for output as vectors
-#' @keywords internal
+# Shiny module for output as vectors
 map2dUi <- function(id) {
 
     ns <- shiny::NS(id)
@@ -14,19 +13,19 @@ map2dUi <- function(id) {
                     title="Data source", icon=shiny::icon("folder-open"),
                     shiny::p("To update the values for variables and time step, please select a case below."),
                     shinyWidgets::virtualSelectInput(ns("cases1"), "Select a case for the main map",
-                                                     choices="", multiple=FALSE,
+                                                     choices=character(0), multiple=FALSE,
                                                      autoSelectFirstOption=TRUE, hideClearButton=FALSE),
-                    shiny::selectInput(ns("ncVar1"), "Select variable", choices=""),
+                    shiny::selectInput(ns("ncVar1"), "Select variable", choices=character(0)),
                     shinyWidgets::prettySwitch(ns("dryAsNa"), "For water level, treat dry as NaN", value=TRUE),
                     shiny::sliderInput(ns("lyr"), "Select a layer", min=1L, max=10L,
                                        value=1L, step=1L, pre="Layer "),
-                    shiny::selectizeInput(ns("tsIdx1"), "Select time step", choices=""),
+                    shiny::selectizeInput(ns("tsIdx1"), "Select time step", choices=character(0)),
                     shiny::radioButtons(ns("agg1"), "Select aggregation",
                                         choices=c("none", "min", "max", "mean"), inline=TRUE),
                     shinyWidgets::virtualSelectInput(ns("ncNames1"), "Select domain(s)",
-                                              choices="", multiple=TRUE, search=TRUE),
+                                              choices=character(0), multiple=TRUE, search=TRUE),
                     shinyWidgets::virtualSelectInput(
-                            ns("feats"), "Features of Interest (to select touching domains)", choices="",
+                            ns("feats"), "Features of Interest (to select touching domains)", choices=character(0),
                             multiple=TRUE, search=TRUE),
                     bslib::input_task_button(ns("findDomains"), "Find relevant domains!")
                 ),
@@ -65,14 +64,14 @@ map2dUi <- function(id) {
                 bslib::accordion_panel(
                     title="Compare", icon=shiny::icon("microscope"),
                     shinyWidgets::virtualSelectInput(ns("cases2"), "Select a case for the second map (to compare)",
-                                                     choices="", multiple=FALSE,
+                                                     choices=character(0), multiple=FALSE,
                                                      autoSelectFirstOption=FALSE, hideClearButton=FALSE),
-                    shiny::selectInput(ns("ncVar2"), "Select variable", choices=""),
-                    shiny::selectizeInput(ns("tsIdx2"), "Select time step", choices=""),
+                    shiny::selectInput(ns("ncVar2"), "Select variable", choices=character(0)),
+                    shiny::selectizeInput(ns("tsIdx2"), "Select time step", choices=character(0)),
                     shiny::radioButtons(ns("agg2"), "Select aggregation",
                                         choices=c("none", "min", "max", "mean"), inline=TRUE),
                     shinyWidgets::virtualSelectInput(ns("ncNames2"), "Select domain(s)",
-                                                     choices="", multiple=TRUE, search=TRUE)
+                                                     choices=character(0), multiple=TRUE, search=TRUE)
                 ),
                 bslib::accordion_panel(
                     title="Export data", icon=shiny::icon("file-export"),
@@ -117,7 +116,6 @@ map2dUi <- function(id) {
     )
 }
 
-#' @keywords internal
 map2dServer <- function(id, cman) {
     shiny::moduleServer(id=id, function(input, output, session) {
         shinyjs::hide(id="lyr")
@@ -198,7 +196,6 @@ map2dServer <- function(id, cman) {
                     shiny::showNotification("Check input!")
                     return(NULL)
                 }
-                browser()
                 pols <- feats[grepl("POLYGON", feats$ftype, fixed=TRUE), ]
                 polsOverlap <- sf::st_overlaps(pols, fRings)
                 pRet <- list()
@@ -274,8 +271,8 @@ map2dServer <- function(id, cman) {
 
         mapData1 <- shiny::reactive({
             agg1 <- input$agg1
-            tsIdx1 <- ifelse(input$agg1 == "none", input$tsIdx1, -1L)
-            ncNames1 <- input$ncNames1[nchar(input$ncNames1) > 0]
+            tsIdx1 <- ifelse(input$agg1 == "none", as.integer(input$tsIdx1), -1L)
+            ncNames1 <- input$ncNames1[nchar(input$ncNames1) > 0] |> sort()
             ncVar1 <- input$ncVar1
             lyr <- input$lyr
             if (length(ncNames1) < 1)
@@ -289,6 +286,8 @@ map2dServer <- function(id, cman) {
             polLst <- list()
             for (i in seq_along(meshLst)) {
                 polLst[[i]] <- meshLst[[i]]$ret
+                hIdx <- cman$tbl[path %in% meshLst[[i]]$path, idx]
+                polLst[[i]]$faceID <- hIdx * 10^6 + polLst[[i]]$faceID
                 meshLst[[i]]$ret <- NULL
                 thisHash <- cman$tbl[path == meshLst[[i]]$path, hash]
                 cman$ugrids[[thisHash]] <- meshLst[[i]]
@@ -407,6 +406,7 @@ map2dServer <- function(id, cman) {
                                 ifelse(input$agg1 == "none", ts1, input$agg1),
                                 thisVar[, unit])
                 rsf <- rescale(sf::st_bbox(mdta1))
+
                 map1 <- genMap(pol=mdta1, field=input$ncVar1, n=input$nClass, style=input$clsStyle,
                                legendTitle=lgT1, mapId=session$ns("map1"), addControls=TRUE,
                                colPal=input$colPal, continuous=input$continuous, reverse=input$colReverse, rsf=rsf)

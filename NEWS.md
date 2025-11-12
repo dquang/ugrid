@@ -26,3 +26,8 @@
 
 * added some Deflt3D-FM test data
 * changed displayed names of variables to long_name.
+
+# ugrid 0.1.5.2
+
+* corrected data slicing (face-data a long a line)
+

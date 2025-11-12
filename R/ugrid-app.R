@@ -15,8 +15,8 @@ notificationStyle <- ".shiny-notification {
 # source: https://stackoverflow.com/questions/46559251/how-to-add-multiple-line-breaks-conveniently-in-shiny
 nBrks <- function(n){shiny::HTML(rep("<br/>", n))}
 
-#' UI function of main shiny app
-#' The structure of the ui and the big-buttons was inspired by this app: https://github.com/voronoys/voronoys_sc
+# UI function of main shiny app
+# The structure of the ui and the big-buttons was inspired by this app: https://github.com/voronoys/voronoys_sc
 appUi <- function(request) {
 
     shiny::addResourcePath("img", system.file("app/www/img", package="ugrid"))
@@ -30,7 +30,6 @@ appUi <- function(request) {
          theme = bslib::bs_theme(bootswatch="cerulean"),
          header=shiny::tagList(
              shinyjs::useShinyjs(),
-             rintrojs::introjsUI(),
              tags$head(
                  tags$link(rel="icon", href="favicon.ico"),
                  tags$style(".navbar-header {height: 50px; min-height:25px; padding:0px; margin:0px;}"),
@@ -119,7 +118,6 @@ uiHomeIntro <- function() {
                 shiny::p(),
                 bslib::card(
                     bslib::card_header("Ugrid Convention"),
-                    lorem::ipsum(2, 5),
                     shiny::p()
                 )
             )
@@ -146,19 +144,19 @@ uiSetting <- function() {
                 shiny::h3("Choose or add working cases"),
                 shiny::fluidRow(
                     shiny::selectizeInput("moreCase", "Select cases to work with",
-                                          choices=ctbl$caseName, multiple=TRUE, width="100%"),
+                                          choices=character(0), multiple=TRUE, width="100%"),
                     shiny::div(class="d-grid gap-2",
                                bslib::input_task_button("addSelectedCase", "Add selected cases", width="50%")),
                     shiny::hr(),
                     shiny::column(9, shinyWidgets::textInputIcon(
                         "casePath", "Add a case using format Name=/path/to/folder",
                         value=getOption("ugrid.case"), width="100%")),
-                    shiny::column(3, shiny::div(id="div-caseCrs" ,shinyWidgets::virtualSelectInput(
+                    shiny::column(3, shiny::div(id="div-caseCrs", shinyWidgets::virtualSelectInput(
                         "caseCrs", "CRS", choices=crsidChoices, multiple=FALSE,
                         autoSelectFirstOption=FALSE, search=TRUE, hideClearButton=FALSE)))
                 ),
                 shiny::div(class="d-grid gap-2", bslib::input_task_button("addCase", "Add case from path", width="50%")),
-                shiny::selectizeInput("cases", "Case(s) to update CRS", choices="", multiple=TRUE, width="100%"),
+                shinyWidgets::virtualSelectInput("cases", "Case(s) to update CRS", choices=character(0), multiple=TRUE, width="100%"),
                 shinyWidgets::prettyToggle("keepCrs", value=TRUE, label_off="Ignore CRS in NetCDF files.",
                                            label_on="Keep CRS in NetCDF files."),
                 shiny::div(class="d-grid gap-2", bslib::input_task_button(
@@ -175,6 +173,14 @@ uiSetting <- function() {
             bslib::accordion_panel(
                 title="Time setting",
                 shinyWidgets::airDatepickerInput ("time", "Time input")
+            ),
+            bslib::accordion_panel(
+                title="Remove cached objects",
+                shiny::div(class="d-grid gap-2", bslib::input_task_button(
+                    "clearCachedObjects", "Clear all cached objects", width="50%")),
+                shiny::hr(),
+                shiny::div(class="d-grid gap-2", bslib::input_task_button(
+                    "clearFeatures", "Clear all uploaded / drawed features", width="50%"))
             )
         )
     )
@@ -215,37 +221,38 @@ uiResultLayer <- function() {
 appServer <- function(input, output, session) {
 
     # increasing max filesize to upload to 100Mb
-    options(shiny.maxRequestSize=100*1024^2)
+    options(shiny.maxRequestSize = 100 * 1024 ^ 2)
     options(ugrid.pattern="_map\\.nc$")
-    sampleCases <- list.files(system.file("testdata/d3dfm/", package="ugrid"), full.names=TRUE)
-    ctbl <- rbind(ctbl, data.table(caseName=paste0("Example_", basename(sampleCases)),
-                                   casePath=sampleCases))
     if (!exists("cman")) {
         cman <- initCaseManager()
     }
-
+    sampleCases <- list.files(system.file("testdata/d3dfm/", package="ugrid"), full.names=TRUE)
+    if (!exists("ctbl"))
+        ctbl <- NULL
+    ctbl <- rbind(ctbl, data.table::data.table(caseName=paste0("Example_", basename(sampleCases)),
+                                               casePath=sampleCases))
+    shiny::updateSelectizeInput(inputId="moreCase", choices=ctbl$caseName, server=TRUE)
 # Tours -----------------------------------------------------------------------------------------------------------
-    shiny::updateSelectizeInput(inputId="addSelectedCase", choices=ctbl$caseName, server=TRUE)
     map2dServer(id="retMap", cman=cman)
     map2dCalcServer(id="raster", cman=cman)
     map2dLineServer(id="retLine", cman=cman)
     map2dLayerServer(id="retLayer", cman=cman)
-    observeEvent(input$btnH2Map, {
+    shiny::observeEvent(input$btnH2Map, {
         bslib::nav_select(id="navbar", selected="tpMap")
     })
-    observeEvent(input$btnH2Rast, {
+    shiny::observeEvent(input$btnH2Rast, {
         bslib::nav_select(id="navbar", selected="tpRaster")
     })
-    observeEvent(input$btnH2Profile, {
+    shiny::observeEvent(input$btnH2Profile, {
         bslib::nav_select(id="navbar", selected="tpLine")
     })
-    observeEvent(input$btnH2Set, {
+    shiny::observeEvent(input$btnH2Set, {
         bslib::nav_select(id="navbar", selected="tpSetting")
     })
-    observeEvent(input$btnH2Layer, {
+    shiny::observeEvent(input$btnH2Layer, {
         bslib::nav_select(id="navbar", selected="tpLayer")
     })
-    observeEvent(input$featFile, {
+    shiny::observeEvent(input$featFile, {
         fInfo <- isolate(input$featFile) |> data.table::as.data.table()
         fInfo[, newPath := paste0(dirname(datapath), "/", name)]
         file.rename(from=fInfo$datapath, to=fInfo$newPath)
@@ -259,7 +266,7 @@ appServer <- function(input, output, session) {
         } else {
             dsnFile <- fInfo$newPath[1]
         }
-        isPli <- grepl("\\.pli$|\\.pli$", dsnFile, ignore.case=TRUE)
+        isPli <- grepl("\\.pli$|\\.pliz$", dsnFile, ignore.case=TRUE)
         if (isPli) {
             lyr <- tryCatch(readPli(dsnFile), error=function(e) e)
         } else {
@@ -292,22 +299,26 @@ appServer <- function(input, output, session) {
             lyr$ftype <- sf::st_geometry_type(lyr, by_geometry=TRUE)
             ftypes <- sf::st_geometry_type(lyr, by_geometry=TRUE)
             lyr <- lyr[, c("id", "fname", "ftype")]
-            if (is(cman$layer, "sf"))
-                lyr <- sf::st_set_geometry(lyr, attr(cman$layer, "sf_column"))
+            lyrSfc <- attr(lyr, "sf_column")
+            cmanSfc <- attr(cman$layer, "sf_column")
+            if (is(cman$layer, "sf")) {
+                lyr <- sf::st_set_geometry(lyr, cmanSfc)
+            } else if (lyrSfc != "geometry") {
+                lyr <- sf::st_set_geometry(lyr, "geometry")
+            }
             lyr <- sf::st_zm(lyr, drop=TRUE)
             cman$layer <- rbind(lyr, cman$layer)
         }
     })
-    observeEvent(cman$layer, {
+    shiny::observeEvent(cman$layer, {
         if (is(cman$layer, "sf")) {
             featChoices <- shinyWidgets::prepare_choices(cman$layer, label=fname, value=id, group_by=ftype)
-            shinyWidgets::updateVirtualSelect(inputId="retMap-feats", choices=featChoices)
-            shinyWidgets::updateVirtualSelect(inputId="raster-feats", choices=featChoices)
-            shinyWidgets::updateVirtualSelect(inputId="retLayer-feats", choices=featChoices)
-            shinyWidgets::updateVirtualSelect(inputId="retLine-feats", choices=featChoices)
+            featIds <- grep("-feats$", names(input), value=TRUE)
+            for (id in featIds)
+                shinyWidgets::updateVirtualSelect(inputId=id, choices=featChoices)
         }
     })
-    observeEvent(input$addCase, {
+    shiny::observeEvent(input$addCase, {
         newCase <- strsplit(input$casePath, split="=", fixed=TRUE)[[1]]
         if (length(newCase) != 2) {
             shiny::showNotification("Check input. Path must be in format: Case name = /path/to/folder")
@@ -321,7 +332,7 @@ appServer <- function(input, output, session) {
                      initUgrid = input$initUgrid)
         }
     })
-    observeEvent(input$addSelectedCase, {
+    shiny::observeEvent(input$addSelectedCase, {
         if (length(input$moreCase) > 0) {
             caseLst <- ctbl[caseName %in% input$moreCase, casePath]
             names(caseLst) <- ctbl[caseName %in% input$moreCase, caseName]
@@ -329,7 +340,7 @@ appServer <- function(input, output, session) {
             addCases(caseLst=caseLst, cman=cman, crs=thisCrs, ignoreCrsInFile=!input$keepCrs, initUgrid = input$initUgrid)
         }
     })
-    observeEvent(input$updateCrs, {
+    shiny::observeEvent(input$updateCrs, {
         chk <- isTRUE(all(nchar(input$cases) > 0)) & chkChr(input$caseCrs)
         if (!chk) {
             shiny::showNotification("Please select at least one case and select also CRS.")
@@ -354,14 +365,23 @@ appServer <- function(input, output, session) {
             shiny::showNotification("Done.")
         }
     })
-    observeEvent(cman$cases, {
-        shiny::updateSelectizeInput(inputId="cases", choices=cman$cases)
-        shinyWidgets::updateVirtualSelect(inputId="retMap-cases1", choices=cman$cases)
-        shinyWidgets::updateVirtualSelect(inputId="retMap-cases2", choices=cman$cases)
-        shinyWidgets::updateVirtualSelect(inputId="raster-cases1", choices=cman$cases)
-        shinyWidgets::updateVirtualSelect(inputId="raster-cases2", choices=cman$cases)
-        shinyWidgets::updateVirtualSelect(inputId="retLine-cases1", choices=cman$cases)
-        shinyWidgets::updateVirtualSelect(inputId="retLayer-cases1", choices=cman$cases)
+    shiny::observeEvent(cman$cases, {
+        caseIds <- grep("-*cases\\d*$", names(input), value=TRUE)
+        for (id in caseIds)
+            shinyWidgets::updateVirtualSelect(inputId=id, choices=cman$cases)
+    })
+    shiny::observeEvent(input$clearCachedObjects, {
+        objs <- names(cman)
+        objs <- objs[!objs %in% c("tbl", "cases", "layer")]
+        for (obj in objs)
+            cman[[obj]] <- NULL
+        gc()
+    })
+    shiny::observeEvent(input$clearFeatures, {
+        cman$layer <- NULL
+        featIds <- grep("-feats$", names(input), value=TRUE)
+        for (id in featIds)
+            shinyWidgets::updateVirtualSelect(inputId=id, choices=character(0))
     })
 }
 

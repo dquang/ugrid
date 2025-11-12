@@ -1,4 +1,3 @@
-#' Shiny module for
 map2dLineUi <- function(id) {
 
     ns <- shiny::NS(id)
@@ -16,17 +15,17 @@ map2dLineUi <- function(id) {
                     shiny::h4("First raster parameters"),
                     shiny::p("To update the values for variables and time step, please select a case below."),
                     shinyWidgets::virtualSelectInput(ns("cases1"), "Select case(s)",
-                                                     choices="", multiple=TRUE, autoSelectFirstOption=TRUE),
+                                                     choices=character(0), multiple=TRUE, autoSelectFirstOption=TRUE),
                     shiny::sliderInput(ns("lyr"), "Select a layer", min=1L, max=10L, value=1L, step=1L, pre="Layer "),
-                    shiny::selectInput(ns("ncVar1"), "Variable", choices=""),
-                    shiny::selectizeInput(ns("tsIdx1"), "Time step", choices=""),
+                    shiny::selectInput(ns("ncVar1"), "Variable", choices=character(0)),
+                    shiny::selectizeInput(ns("tsIdx1"), "Time step", choices=character(0)),
                     shiny::radioButtons(ns("agg1"), "Aggregation method",
                                         choices=c("none", "min", "max", "mean"), inline=TRUE),
                     shinyWidgets::virtualSelectInput(
-                        ns("ncNames1"), "NetCDF files / domains", choices="", multiple=TRUE, search=TRUE),
+                        ns("ncNames1"), "NetCDF files / domains", choices=character(0), multiple=TRUE, search=TRUE),
                     bslib::tooltip(
                         shinyWidgets::virtualSelectInput(
-                            ns("feats"), "Features of Interest (to select touching domains)", choices="",
+                            ns("feats"), "Features of Interest (to select touching domains)", choices=character(0),
                             multiple=TRUE, search=TRUE),
                         "To select domains from all project that are touched or intersected with given features.
                         Please select the features from the list"),
@@ -190,41 +189,44 @@ map2dLineServer <- function(id, cman) {
             map2d()
         })
         output$linePlot <- plotly::renderPlotly({
-            ncVar1 <- input$ncVar1
-            lname <- paste(ncVar1, input$feats, input$cases1, collapse=";") |>
-                digest::digest()
-            tbl <- cman$lyrDta[[lname]]
-            if (!inherits(tbl, "data.table"))
-                return(NULL)
-            caseHashes <- cman$tbl[caseName %in% input$cases1 & hash %in% names(cman$ugrids), hash]
-            aM <- cman$ugrids[[caseHashes[1]]]
-            vName <- aM$getVarName(ncVar1)
-            varTbl <- aM$vars[name == vName]
-            varTbl[!is.na(unit), long_name := paste0(long_name, " [", unit, "]")]
-            isTime <- varTbl[, hasTime]
-            yTitle <- varTbl$long_name
-            if ("lyr" %in% colnames(tbl))
-                tbl <- tbl[lyr == input$lyr][, lyr := NULL]
-            if (nrow(tbl[!is.na(value)]) < 1) {
-                shiny::showNotification("Data for this layer is all NA!")
-                return(NULL)
-            }
-            if (input$agg1 != "none") {
-                af <- get(input$agg1)
-                tbl <- tbl[, af(value, na.rm=TRUE), by=sta]
-                setnames(tbl, "V1", "value")
-            }
-            p <- plotly::plot_ly(data=tbl, type="scatter", mode="lines") |>
-                plotly::layout(xaxis=list(title="Chainage [m]"), yaxis=list(title=yTitle))
-            if (input$agg1 != "none" | !isTime) {
-                p <- plotly::add_lines(p, x=~sta, y=~value, name=paste0(yTitle, " (", input$agg1, ")"))
-            } else {
-                p <- plotly::add_lines(p, frame=~ts, x=~sta, y=~value, name=yTitle) |>
-                    plotly::animation_slider(currentvalue=list(prefix="Timestep", visible=TRUE,
-                                                               font=list(color="red"))) |>
-                    plotly::animation_opts(easing="bounce-in", frame = 500)
-            }
-            p
+            shiny::withProgress({
+                ncVar1 <- input$ncVar1
+                lname <- paste(ncVar1, input$feats, input$cases1, collapse=";") |>
+                    digest::digest()
+                tbl <- cman$lyrDta[[lname]]
+                if (!inherits(tbl, "data.table"))
+                    return(NULL)
+                caseHashes <- cman$tbl[caseName %in% input$cases1 & hash %in% names(cman$ugrids), hash]
+                aM <- cman$ugrids[[caseHashes[1]]]
+                vName <- aM$getVarName(ncVar1)
+                varTbl <- aM$vars[name == vName]
+                varTbl[!is.na(unit), long_name := paste0(long_name, " [", unit, "]")]
+                isTime <- varTbl[, hasTime]
+                yTitle <- varTbl$long_name
+                if ("lyr" %in% colnames(tbl))
+                    tbl <- tbl[lyr == input$lyr][, lyr := NULL]
+                if (nrow(tbl[!is.na(value)]) < 1) {
+                    shiny::showNotification("Data for this layer is all NA!")
+                    return(NULL)
+                }
+                if (input$agg1 != "none") {
+                    af <- get(input$agg1)
+                    tbl <- tbl[, af(value, na.rm=TRUE), by=sta]
+                    setnames(tbl, "V1", "value")
+                }
+                p <- plotly::plot_ly(data=tbl, type="scatter", mode="lines") |>
+                    plotly::layout(xaxis=list(title="Chainage [m]"), yaxis=list(title=yTitle))
+                if (input$agg1 != "none" | !isTime) {
+                    p <- plotly::add_lines(p, x=~sta, y=~value, name=paste0(yTitle, " (", input$agg1, ")"))
+                } else {
+                    p <- plotly::add_lines(p, frame=~ts, x=~sta, y=~value, name=yTitle,
+                                           hovertext=~paste("faceID: ", faceID, ". Value: ", round(value, 3))) |>
+                        plotly::animation_slider(currentvalue=list(prefix="Timestep", visible=TRUE,
+                                                                   font=list(color="red"))) |>
+                        plotly::animation_opts(easing="bounce-in", frame = 500)
+                }
+                p
+            }, message = "Generating plot...")
         })
 
         shiny::observeEvent(input$sliceData, {
@@ -234,6 +236,10 @@ map2dLineServer <- function(id, cman) {
                 return(NULL)
             }
             fRing <- frings()$ring
+            if (!sf::st_can_transform(fRing, 4326)) {
+                shiny::showNotification("Cannot tranform faces to EPSG:4326!")
+                return(NULL)
+            }
             lines <- cman$layer[cman$layer$id %in% input$feats, ]
             if (!isTRUE(nrow(lines) > 0)){
                 shiny::showNotification("Please select a line for calculation. Did you upload or draw some?")
@@ -253,40 +259,66 @@ map2dLineServer <- function(id, cman) {
                     digest::digest()
                 if (!inherits(cman$lyrDta[[lname]], "data.table")) {
                     lineMesh <- getFaceData4Var(mesh=lineMesh, variable=ncVar1)
-                    dta <- sapply(lineMesh, function(x) as.vector(x$data2D$face[[ncVar1]])) |> unlist()
                     aM <- lineMesh[[1]]
                     vName <- aM$getVarName(ncVar1)
                     ncUnit1 <- aM$vars[name == vName, unit]
-                    mDim <- dim(aM$data2D$face[[ncVar1]])
-                    nDim <- length(mDim)
-                    if (nDim > 2)
-                        mDim[2] <- as.integer(length(dta) / mDim[1] / mDim[3])
-                    else
-                        mDim[1] <- length(dta) / mDim[2]
-                    if (nDim > 0)
-                        dta <- array(dta, dim=mDim)
-                    faces <- lapply(seq_along(lineMesh), function(j) lineMesh[[j]]$m2D$face2D)
+                    isTime <- aM$vars[name == vName, hasTime]
+                    faces <- lapply(seq_along(lineMesh), function(j) {
+                        pol <- lineMesh[[j]]$m2D$face2D
+                        pol$faceName <- basename(lineMesh[[j]]$path)
+                        pol <- pol[pol$faceID %in% lineMesh[[j]]$m2D$fids, ]
+                        fidx <- cman$tbl[path %in% lineMesh[[j]]$path, idx]
+                        pol$faceID <- fidx * 10^6 + pol$faceID
+                        pol
+                        })
                     faces <- do.call(rbind, faces)
-                    if (is.na(sf::st_crs(faces)))
-                        faces <- squash2Bbox(faces)
-                    else
-                        faces <- sf::st_transform(faces, 4326)
-                    lineInt <- sf::st_intersects(lines, faces) |> unlist()
+                    faces <- sf::st_transform(faces, 4326)
+                    lineInt <- tryCatch(sf::st_intersects(lines, faces),
+                                        error=function(e) sf::st_intersects(lines, sf::st_make_valid(faces))) |>
+                        unlist()
                     lineFaces <- faces[lineInt, ]
-                    lineDta <- if (nDim > 2) dta[, lineInt, ] else if (nDim > 0) dta[lineInt, ] else dta[lineInt]
-                    station <- calcStation(line=lines, pol=lineFaces)
-                    dDim <- dim(lineDta)
-                    ldta <- data.table::data.table(value=as.vector(lineDta))
-                    if (nDim > 2) {
-                        ldta$lyr <- rep(1:dDim[1], times = dDim[2] * dDim[3])
-                        ldta$sta <- rep(rep(station,  each = dDim[1]), times=dDim[3])
-                        ldta$ts <- rep(aM$ts, each = dDim[1] * dDim[2])
-                    } else if (nDim > 1) {
-                        ldta$sta <- rep(station, dDim[2])
-                        ldta$ts <- rep(aM$ts, each=dDim[1])
-                    } else {
-                        ldta$sta <- station
-                    }
+                    lineSec <- sf::st_intersection(lineFaces, lines)
+                    lineSec <- lineSec[, "faceID"]
+                    midPts <- sf::st_centroid(lineSec) |> sf::st_as_sfc()
+                    distances <- sf::st_line_project(sf::st_as_sfc(lines), midPts)
+                    distTbl <- data.table::data.table(d=distances, idx=seq_along(distances))
+                    data.table::setorder(distTbl, d)
+                    lineSec <- lineSec[distTbl$idx, "faceID"]
+                    lineSec$sta <- calcStation(lineSec)
+                    lineSecTbl <- sf::st_drop_geometry(lineSec)
+                    dta <- lapply(seq_along(lineMesh), function(j) {
+                        tbl <- lineMesh[[j]]$data2D$face[[ncVar1]]
+                        tDim <- dim(tbl)
+                        nDim <- length(tDim)
+                        fidx <- cman$tbl[path %in% lineMesh[[j]]$path, idx]
+                        fids <- fidx * 10^6 + seq_len(nrow(lineMesh[[j]]$m2D$face2D))
+                        if (nDim > 2) {
+                            tbl <- matrix(tbl, nrow = tDim[1] * tDim[2], ncol = tDim[3])
+                            tbl <- data.table::data.table(tbl)
+                            tbl[, lyr := rep(seq_len(tDim[1]), times=tDim[2])]
+                            tbl[, faceID := rep(fids, each=tDim[1])]
+                        } else if (nDim > 1 & isTime) {
+                            tbl <- data.table::data.table(tbl)
+                            tbl[, faceID := fids]
+                        } else if (nDim > 1 & !isTime) {
+                            stop("This kind of variable is not considered!")
+                        } else {
+                            tbl <- data.table::data.table(value=tbl)
+                            tbl[, faceID := fids][, ts := 0L]
+                        }
+                        if (isTime) {
+                            tbl <- data.table::melt(tbl, measure.vars=paste0("V", seq_len(aM$totalTs)),
+                                                    variable.name="tsName")
+                            tsTbl <- data.table::data.table(tsName=paste0("V", seq_len(aM$totalTs)),
+                                                            ts=aM$ts)
+                            tbl <- merge(tbl, tsTbl, by="tsName")
+                            tbl[, tsName := NULL]
+                        }
+                        tbl
+                    }) |>
+                        data.table::rbindlist()
+                    ldta <- merge(dta, lineSecTbl, by="faceID")
+                    data.table::setorder(ldta, sta, ts)
                     cman$lyrDta[[lname]] <- ldta
                 }
                 shiny::showNotification("Data for the line was generated!")

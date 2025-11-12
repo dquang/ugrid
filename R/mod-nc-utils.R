@@ -368,14 +368,16 @@ addCases <- function(caseLst, cman, pattern=getOption("ugrid.pattern"),
                         cman$ugrids <- c(cman$ugrids, meshes)
                 }
                 cman$cases <- c(cman$cases, cName)
-                cman$tbl <- rbind(cman$tbl, tbl)
+                cman$tbl <- rbind(cman$tbl, tbl, fill=TRUE)
                 msg[i] <- TRUE
             }
+            cman$tbl[, idx := .I]
         }
     }
     return(msg)
 }
 
+#' @keywords internal
 addUgrid <- function(path, cman, overwrite=FALSE) {
 
     if (!path %in% cman$tbl$path) {
@@ -395,14 +397,12 @@ addUgrid <- function(path, cman, overwrite=FALSE) {
         thisIgnoreCrs <- cman$tbl[hash == thisHash, ignoreFileCrs]
         cman$ugrids[[thisHash]] <- Ugrid$new(ncFile=path, crs=thisCrs, newCrs=thisNewCrs,
                                              ignoreCrsInFile=thisIgnoreCrs, domainInfo=TRUE)
-        if (!path %in% cman$tbl$path)
-            cman$tbl <- rbind(cman$tbl,
-                              data.table::data.table(path=path, hash=hash, ncName=basename(path)))
     }
 
     invisible(cman$ugrids[[thisHash]])
 }
 
+#' @keywords internal
 addHis <- function(caseLst, cman) {
 
     if (length(caseLst) != length(names(caseLst))) {
@@ -455,8 +455,9 @@ initCaseManager <- function(
     if (!chkChr(pattern))
         pattern <- "\\.nc$"
     cman <- shiny::reactiveValues(tbl=NULL, ugrids=list(), cases=vector(mode="character"))
-    if (length(caseLst) > 0)
+    if (length(caseLst) > 0) {
         addCases(cman, caseLst=caseLst, pattern=pattern, crs=crs,
                  newCrs=newCrs, ignoreCrsInFile=ignoreCrsInFile, initUgrid=initUgrid)
+    }
     return(cman)
 }

@@ -102,7 +102,7 @@ HisNc <- R6::R6Class(
         },
         #' @description
         #' Read data for a variable and a list of stations
-        #' @param var Name/ID of the variable
+        #' @param variable Name/ID of the variable
         #' @param at Name of the dimension in which the variable is located.
         #' @param cache Logical. If TRUE, the whole data array of the variable will be stored in memory.
         #' This parameter behaves as following:
@@ -131,7 +131,7 @@ HisNc <- R6::R6Class(
         },
         #' @description
         #' Read time series data for a variable.
-        #' @param var Name/ID of the variable
+        #' @param variable Name/ID of the variable
         #' @param at Name of the dimension in which the variable is located.
         #' @param ids Character vector of IDs to get data. It will be ignored if the variable is only a single time serie.
         #' @param idNames Names to assign as column names for the IDs.
@@ -210,6 +210,8 @@ HisNc <- R6::R6Class(
 
             return(ncVar)
         },
+        #' @description
+        #' Read information about simulation time and timesteps.
         getTsInfo = function() {
             tsIds <- self$tsIds
             locations <- gsub("_name$|_id$", "", tsIds)

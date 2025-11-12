@@ -403,7 +403,8 @@ Ugrid <- R6::R6Class(
             } else {
                 dta <- RNetCDF::var.get.nc(self$nc, variable=ncVar, ...)
                 varDim <- self$vars[name == ncVar, .SD, .SDcols = data.table::patterns("^dim")]
-                varDim <- suppressWarnings(melt(varDim, measure.vars = list(dimId=1:3, dimName=4:6), variable.name = "tmp"))
+                varDim <- suppressWarnings(melt(varDim,
+                                                measure.vars = list(dimId=1:3, dimName=4:6), variable.name = "tmp"))
                 varDim[, dimIdx := .I][, tmp := NULL]
                 varDim <- varDim[!is.na(dimId)]
                 if (nrow(varDim) < 2) {

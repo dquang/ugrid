@@ -1,4 +1,4 @@
-#' Shiny module for output as rasters.
+# Shiny module for output as rasters.
 map2dLayerUi <- function(id) {
 
     ns <- shiny::NS(id)
@@ -15,15 +15,15 @@ map2dLayerUi <- function(id) {
                     title="Data source", icon=shiny::icon("folder-open"),
                     shiny::p("To update the values for variables and time step, please select a case below."),
                     shinyWidgets::virtualSelectInput(ns("cases1"), "Select case(s)",
-                                                     choices="", multiple=TRUE, autoSelectFirstOption=TRUE),
+                                                     choices=character(0), multiple=TRUE, autoSelectFirstOption=TRUE),
                     shiny::hr(),
                     shiny::h4("First raster parameters"),
-                    shiny::selectInput(ns("ncVar1"), "Variable", choices=""),
-                    shiny::selectizeInput(ns("tsIdx1"), "Time step", choices="", multiple = TRUE),
+                    shiny::selectInput(ns("ncVar1"), "Variable", choices=character(0)),
+                    shiny::selectizeInput(ns("tsIdx1"), "Time step", choices=character(0), multiple = TRUE),
                     shiny::radioButtons(ns("agg1"), "Aggregation method",
                                         choices=c("none", "min", "max", "mean"), inline=TRUE),
                     shinyWidgets::virtualSelectInput(
-                        ns("ncNames1"), "NetCDF files / domains", choices="", multiple=TRUE, search=TRUE),
+                        ns("ncNames1"), "NetCDF files / domains", choices=character(0), multiple=TRUE, search=TRUE),
                     bslib::tooltip(
                         shinyWidgets::virtualSelectInput(
                             ns("feats"), "Features of Interest (to select touching domains)",
@@ -107,7 +107,7 @@ map2dLayerServer <- function(id, cman) {
                 selected=input$colPal, palTbl=palTbl())
         }) |>
             shiny::bindEvent(palTbl(), input$continuous, input$colReverse)
-        frings <- shiny::reactive({
+        fRings <- shiny::reactive({
             selectedCases <- cman$cases[cman$cases %in% input$cases1]
             if (length(selectedCases) < 1) {
                 shiny::showNotification("Please select at least a case first!")
@@ -143,7 +143,7 @@ map2dLayerServer <- function(id, cman) {
             return(pol)
         })
         shiny::observeEvent(input$genOverview, {
-            pol <- frings()
+            pol <- fRings()
             lines <- cman$layer[grepl("LINESTRING", cman$layer$ftype), ]
             pts <- sf::st_centroid(lines)
             dpols <- cman$layer[grepl("POLYGON", cman$layer$ftype), ]
@@ -202,7 +202,11 @@ map2dLayerServer <- function(id, cman) {
                 return(NULL)
             }
             progress$set(value=0.3, message="Getting domain polygons...")
-            fRing <- frings()
+            fRing <- fRings()
+            if (!sf::st_can_transform(fRing, 4326)) {
+                shiny::showNotification("Cannot tranform faces to EPSG:4326!")
+                return(NULL)
+            }
             progress$set(value=0.4, message="Calculating intersections...")
             lineInt <- sf::st_intersects(lines, fRing)
             lineRet <- lapply(seq_along(lineInt), function(i) fRing$hash[lineInt[[i]]]) |> unlist()
@@ -215,28 +219,70 @@ map2dLayerServer <- function(id, cman) {
                 if (!inherits(cman$lyrInt[[lname]], "data.table")) {
                     progress$set(value=0.6, message="Reading data...")
                     lineMesh <- getFaceData4Var(mesh=lineMesh, variable=ncVar1)
-                    dta <- sapply(lineMesh, function(x) as.vector(x$data2D$face[[ncVar1]])) |> unlist()
                     aM <- lineMesh[[1]]
                     vName <- aM$getVarName(ncVar1)
                     ncUnit1 <- aM$vars[name == vName, unit]
-                    mDim <- dim(aM$data2D$face[[ncVar1]])
-                    mDim[2] <- as.integer(length(dta) / mDim[1] / mDim[3])
-                    dta <- array(dta, dim=mDim)
-                    faces <- lapply(seq_along(lineMesh), function(j) lineMesh[[j]]$m2D$face2D)
+                    isTime <- aM$vars[name == vName, hasTime]
+                    faces <- lapply(seq_along(lineMesh), function(j) {
+                        pol <- lineMesh[[j]]$m2D$face2D
+                        pol <- pol[pol$faceID %in% lineMesh[[j]]$m2D$fids, ]
+                        fidx <- cman$tbl[path %in% lineMesh[[j]]$path, idx]
+                        pol$faceID <- fidx * 10^6 + pol$faceID
+                        pol
+                    })
                     faces <- do.call(rbind, faces)
-                    if (is.na(sf::st_crs(faces)))
-                        faces <- squash2Bbox(faces)
-                    else
-                        faces <- sf::st_transform(faces, 4326)
-                    lineInt <- sf::st_intersects(lines, faces) |> unlist()
+                    faces <- sf::st_transform(faces, 4326)
+                    lineInt <- tryCatch(sf::st_intersects(lines, faces),
+                                        error=function(e) sf::st_intersects(lines, sf::st_make_valid(faces))) |>
+                        unlist()
                     lineFaces <- faces[lineInt, ]
-                    lineDta <- dta[, lineInt, ]
-                    station <- calcStation(line=lines, pol=lineFaces)
-                    lineFaces$km <- station
-                    depth <- aM$getData4Any(variable=aM$m2D$layer$altitude, topo="m2D", at="layer")
+                    lineSec <- sf::st_intersection(lines, lineFaces)
+                    lineSec <- lineSec[, "faceID"]
+                    midPts <- sf::st_centroid(lineSec) |> sf::st_as_sfc()
+                    distances <- sf::st_line_project(sf::st_as_sfc(lines), midPts)
+                    distTbl <- data.table::data.table(d=distances, idx=seq_along(distances))
+                    data.table::setorder(distTbl, d)
+                    lineSec <- lineSec[distTbl$idx, "faceID"]
+                    lineSec$sta <- calcStation(lineSec)
+                    lineSecTbl <- sf::st_drop_geometry(lineSec) |> data.table::as.data.table()
+                    dta <- lapply(seq_along(lineMesh), function(j) {
+                        tbl <- lineMesh[[j]]$data2D$face[[ncVar1]]
+                        tDim <- dim(tbl)
+                        nDim <- length(tDim)
+                        fidx <- cman$tbl[path %in% lineMesh[[j]]$path, idx]
+                        fids <- fidx * 10^6 + seq_len(nrow(lineMesh[[j]]$m2D$face2D))
+                        if (nDim > 2) {
+                            tbl <- matrix(tbl, nrow = tDim[1] * tDim[2], ncol = tDim[3])
+                            tbl <- data.table::data.table(tbl)
+                            tbl[, lyr := rep(seq_len(tDim[1]), times=tDim[2])]
+                            tbl[, faceID := rep(fids, each=tDim[1])]
+                        } else if (nDim > 1 & isTime) {
+                            tbl <- data.table::data.table(tbl)
+                            tbl[, faceID := fids]
+                        } else if (nDim > 1 & !isTime) {
+                            stop("This kind of variable is not considered!")
+                        } else {
+                            tbl <- data.table::data.table(value=tbl)
+                            tbl[, faceID := fids][, ts := 0L]
+                        }
+                        if (isTime) {
+                            tbl <- data.table::melt(tbl, measure.vars=paste0("V", seq_len(aM$totalTs)),
+                                                    variable.name="tsName")
+                            tsTbl <- data.table::data.table(tsName=paste0("V", seq_len(aM$totalTs)),
+                                                            ts=aM$ts)
+                            tbl <- merge(tbl, tsTbl, by="tsName")
+                            tbl[, tsName := NULL]
+                        }
+                        tbl
+                    }) |>
+                        data.table::rbindlist()
+                    lineDta <- merge(lineSecTbl, dta, by="faceID")
+                    lDepth <- aM$getData4Any(variable=aM$m2D$layer$altitude, topo="m2D", at="layer")
+                    dTbl <- data.table::data.table(depth=lDepth, lyr=seq_along(lDepth))
                     tsName <- aM$ts
-                    progress$set(value=0.7, message="Interpolating data...")
-                    ldta <- calcIsolineData(depth=depth, station=station, dta=lineDta, tsName=tsName)
+                    progress$set(value=0.7, message="Interpolating data for all time steps...")
+                    lineDta <- merge(lineDta, dTbl, by="lyr")
+                    ldta <- calcIsolineData(dta=lineDta, tsName=tsName)
                     cman$lyrInt[[lname]] <- ldta
                     map <- mapgl::maplibre(bounds=lines) |>
                         mapgl::add_fill_layer(source=lineFaces, id="faces", tooltip = "km",
@@ -292,6 +338,10 @@ map2dLayerServer <- function(id, cman) {
             sampleHash <- if (length(intHash) > 0) intHash[1] else caseHash[1]
             aM <- addUgrid(path=cman$tbl[hash == sampleHash, path], cman=cman)
             ncVars <- aM$m2D$layer
+            if (length(ncVars) < 1) {
+                shiny::showNotification("There are no layer-variables available for the selected case.")
+                return(NULL)
+            }
             ncVars <- ncVars[!ncVars %in% unlist(aM$m2D$topo)]
             ncVars <- ncVars[ncVars %in% aM$vars[hasTime==TRUE, name]]
             ncVars <- data.table(name=unlist(ncVars), choice=names(ncVars))

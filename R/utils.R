@@ -15,7 +15,7 @@ fmtDe <- function(rdg, nsmall) {
 #' @keywords internal
 asPOSIXctManyFormats <- function(
     x, origin=NULL,
-    tz=getOption("rtcio.timeZone"), ...) {
+    tz=getOption("ugrid.timeZone"), ...) {
 
     if (length(origin) < 1)
         origin <- as.POSIXct("1970-01-01 00:00:00", tz=tz)

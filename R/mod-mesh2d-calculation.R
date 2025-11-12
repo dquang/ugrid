@@ -1,5 +1,4 @@
-#' Shiny module for raster output
-#' @keywords internal
+# Shiny module for raster output
 map2dCalcUi <- function(id) {
 
     ns <- shiny::NS(id)
@@ -20,18 +19,18 @@ map2dCalcUi <- function(id) {
                     shiny::h4("First raster parameters"),
                     shiny::p("To update the values for variables and time step, please select a case below."),
                     shinyWidgets::virtualSelectInput(ns("cases1"), "Select case for the first raster",
-                                                     choices="", multiple=TRUE, autoSelectFirstOption=TRUE),
-                    shiny::selectInput(ns("ncVar1"), "Variable", choices=""),
+                                                     choices=character(0), multiple=TRUE, autoSelectFirstOption=TRUE),
+                    shiny::selectInput(ns("ncVar1"), "Variable", choices=character(0)),
                     shinyWidgets::prettySwitch(ns("dryAsNa"), "For water level, treat dry as NaN", value=TRUE),
                     shiny::sliderInput(ns("lyr"), "Select a layer", min=1L, max=10L, value=1L, step=1L, pre="Layer "),
-                    shiny::selectizeInput(ns("tsIdx1"), "Time step", choices=""),
+                    shiny::selectizeInput(ns("tsIdx1"), "Time step", choices=character(0)),
                     shiny::radioButtons(ns("agg1"), "Aggregation method",
                                         choices=c("none", "min", "max", "mean"), inline=TRUE),
                     shinyWidgets::virtualSelectInput(
-                        ns("ncNames1"), "NetCDF files / domains", choices="", multiple=TRUE, search=TRUE),
+                        ns("ncNames1"), "NetCDF files / domains", choices=character(0), multiple=TRUE, search=TRUE),
                     bslib::tooltip(
                         shinyWidgets::virtualSelectInput(
-                            ns("feats"), "Features of Interest (to select touching domains)", choices="",
+                            ns("feats"), "Features of Interest (to select touching domains)", choices=character(0),
                             multiple=TRUE, search=TRUE),
                         "To select domains from all project that are touched or intersected with given features.
                         Please select the features from the list"),
@@ -39,14 +38,14 @@ map2dCalcUi <- function(id) {
                     shiny::hr(),
                     shiny::h4("Second raster parameters"),
                     shinyWidgets::virtualSelectInput(ns("cases2"), "Select case for the second raster",
-                                                     choices="", multiple=TRUE, autoSelectFirstOption=TRUE),
-                    shiny::selectizeInput(ns("ncVar2"), "Variable", choices="", multiple=TRUE,
+                                                     choices=character(0), multiple=TRUE, autoSelectFirstOption=TRUE),
+                    shiny::selectizeInput(ns("ncVar2"), "Variable", choices=character(0), multiple=TRUE,
                                           options=list(maxItems=1)),
-                    shiny::selectizeInput(ns("tsIdx2"), "Time step", choices=""),
+                    shiny::selectizeInput(ns("tsIdx2"), "Time step", choices=character(0)),
                     shiny::radioButtons(ns("agg2"), "Aggregation method",
                                         choices=c("none", "min", "max", "mean"), inline=TRUE),
                     shinyWidgets::virtualSelectInput(ns("ncNames2"), "NetCDF files / domains",
-                                              choices="", multiple=TRUE, search=TRUE),
+                                              choices=character(0), multiple=TRUE, search=TRUE),
                     shiny::selectInput(ns("operator"), "Raster operator", choices=c("-", "+", "*", "/")),
                     bslib::input_task_button(ns("calculate"), "Calculate & generate map")
                     ),
@@ -105,7 +104,6 @@ map2dCalcUi <- function(id) {
     )
 }
 
-#' @keywords internal
 map2dCalcServer <- function(id, cman) {
 
     shiny::moduleServer(id=id, function(input, output, session) {

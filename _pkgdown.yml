@@ -19,9 +19,14 @@ template:
 reference:
 - title: "Ugrid object"
   desc: >
-    R6-Ugrid object wrapping NetCDF data that follows Ugrid-Convention
+    R6-Ugrid object wrapping NetCDF data that follows Ugrid-Convention.
   contents:
   - Ugrid
+- title: "HisNc object"
+  desc: >
+    R6-HisNc object wrapping _his.nc NetCDF data.
+  contents:
+  - HisNc
 - title: "Reading data"
   desc: "Functions for reading model output."
   contents:

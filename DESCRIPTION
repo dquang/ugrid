@@ -1,6 +1,6 @@
 Package: ugrid
 Title: Postprocessing for NetCDF-Data in UGRID-Format
-Version: 0.1.5.1
+Version: 0.1.5.2
 Authors@R: c(
     person("Quang", "Duong", , "duong@bafg.de", role = c("aut", "cre")),
     person("Asta", "Kunkel", role = "ctb")
