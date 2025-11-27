@@ -313,6 +313,11 @@ map2dCalcServer <- function(id, cman) {
             resolution <- txt2NumVec(input$resolution)
             vName <- selectedMeshes[[1]]$getVarName(ncVar1)
             varUnit <- selectedMeshes[[1]]$vars[name == vName, unit]
+            hasTime <- selectedMeshes[[1]]$vars[name == vName, hasTime]
+            if (!hasTime) {
+                shiny::showNotification("Choose time dependent variable!")
+                return(NULL)
+            }
             shiny::updateSliderInput(inputId="tsIdxAni", max=selectedMeshes[[1]]$totalTs)
             shiny::showNotification("The rasters will be processed in the background. You will be informed when it has been done.")
             shinyjs::disable("genAll")
