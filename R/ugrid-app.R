@@ -157,7 +157,8 @@ uiSetting <- function() {
                         autoSelectFirstOption=FALSE, search=TRUE, hideClearButton=FALSE)))
                 ),
                 shiny::div(class="d-grid gap-2", bslib::input_task_button("addCase", "Add case from path", width="50%")),
-                shinyWidgets::virtualSelectInput("cases", "Case(s) to update CRS", choices=character(0), multiple=TRUE, width="100%"),
+                shinyWidgets::virtualSelectInput("cases", "Case(s) to update CRS", choices=character(0),
+                                                 multiple=TRUE, width="100%"),
                 shinyWidgets::prettyToggle("keepCrs", value=TRUE, label_off="Ignore CRS in NetCDF files.",
                                            label_on="Keep CRS in NetCDF files."),
                 shiny::div(class="d-grid gap-2", bslib::input_task_button(
@@ -168,8 +169,13 @@ uiSetting <- function() {
                 shiny::p("You can upload your features of interest from following different formats that are supported by sf packages,
                          or deltares-polyline format (.pli, .pliz).
                          Before uploading the data, please make sure that the CRS information is in the dataset
-                         or select one CRS from the list above."),
-                shiny::div(id="div-featFile", shiny::fileInput("featFile", "Upload features of interest", multiple=TRUE))
+                         or select one CRS from the list above.
+                         All relevant files (like all files for the shape-format) must be uploaded together."),
+                shiny::fluidRow(
+                    shiny::column(6, shiny::div(id="div-featFile",
+                                                shiny::fileInput("featFile", "Upload features of interest", multiple=TRUE))),
+                    shiny::column(6, shiny::numericInput("featLyrIdx", label="Layer index", value=1, min=1, max=99, step=1))
+                    )
                 ),
             bslib::accordion_panel(
                 title="Time setting",
@@ -281,10 +287,16 @@ appServer <- function(input, output, session) {
         if (isPli) {
             lyr <- tryCatch(readPli(dsnFile), error=function(e) e)
         } else {
-            lyr <- tryCatch(sf::st_read(dsn=dsnFile), error=function(e) e)
+            layers <- sf::st_layers(dsn=dsnFile)
+            lyrName <- layers$name[as.integer(input$featLyrIdx)]
+            if (!chkChr(lyrName)) {
+                shiny::showNotification(paste("Found no layer with index:", input$featLyrIdx))
+                return(NULL)
+            }
+            lyr <- tryCatch(sf::st_read(dsn=dsnFile, layer=lyrName), error=function(e) e)
         }
         if (inherits(lyr, "error")) {
-            shiny::showNotification(paste("Error while reading uploaded file: ", lyr$message))
+            shiny::showNotification(paste("Error while reading uploaded file:", lyr$message))
         } else if (nrow(lyr) > 0) {
             if (!is.na(sf::st_crs(lyr))) {
                 lyr <- sf::st_transform(lyr, "EPSG:4326")
