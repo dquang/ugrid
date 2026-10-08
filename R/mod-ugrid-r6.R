@@ -48,14 +48,14 @@ Ugrid <- R6::R6Class(
                 # TODO: find out what meaning of the others
                 node1DVars <- node1DVars[!grepl("coordinates forming flow element|flowelem_bl",
                                                 long_name) &
-                                             !grepl("_coordinate$|_Numlimdt", standard_name)]
+                                             !grepl("_coordinate$", standard_name)]
                 node1DVarStdNames <- as.list(node1DVars$name)
                 names(node1DVarStdNames) <- node1DVars$standard_name
                 node1DVarStdNames$node_x <- m1DTopo$node_coordinates[1]
                 node1DVarStdNames$node_y <- m1DTopo$node_coordinates[2]
                 edge1DDimId <- dims[name == m1DTopo$edge_dimension, id]
                 edge1DVars <- vars[(dim1 == edge1DDimId | dim2 == edge1DDimId) &
-                                       !grepl("_coordinate$|_Numlimdt", standard_name)]
+                                       !grepl("_coordinate$", standard_name)]
                 edge1DVarStdNames <- as.list(edge1DVars$name)
                 names(edge1DVarStdNames) <- edge1DVars$standard_name
                 edge1DVarStdNames$edge_x <- m1DTopo$edge_coordinates[1]
@@ -82,7 +82,7 @@ Ugrid <- R6::R6Class(
                     m2DTopo$face_coordinates <- unlist(strsplit(m2DTopo$face_coordinates, " ", fixed=TRUE))
                 node2DDimId <- dims[name == m2DTopo$node_dimension, id]
                 node2DVars <- vars[(dim1 == node2DDimId | dim2 == node2DDimId | dim3 == node2DDimId) &
-                                       !grepl("_coordinate$|_Numlimdt", standard_name)]
+                                       !grepl("_coordinate$", standard_name)]
                 node2DVarStdNames <- as.list(node2DVars$name)
                 names(node2DVarStdNames) <- node2DVars$standard_name
                 node2DVarStdNames$node_x <- m2DTopo$node_coordinates[1]
@@ -90,14 +90,14 @@ Ugrid <- R6::R6Class(
                 edge2DDimId <- dims[name == m2DTopo$edge_dimension, id]
                 edge2DVars <- vars[ndims == 1 &
                                        (dim1 == edge2DDimId | dim2 == edge2DDimId | dim3 == edge2DDimId) &
-                                       !grepl("_coordinate$|_Numlimdt", standard_name)]
+                                       !grepl("_coordinate$", standard_name)]
                 edge2DVarStdNames <- as.list(edge2DVars$name)
                 names(edge2DVarStdNames) <- edge2DVars$standard_name
                 edge2DVarStdNames$edge_x <- m2DTopo$edge_coordinates[1]
                 edge2DVarStdNames$edge_y <- m2DTopo$edge_coordinates[2]
                 face2DDimId <- dims[name == m2DTopo$face_dimension, id]
                 face2DVars <- vars[(dim1 == face2DDimId | dim2 == face2DDimId | dim3 == face2DDimId) &
-                                       !grepl("_coordinate$|_Numlimdt", standard_name)]
+                                       !grepl("_coordinate$", standard_name)]
                 faceDupStd <- face2DVars[duplicated(standard_name), standard_name]
                 face2DVars[standard_name %in% faceDupStd,
                            standard_name := paste0(standard_name, sub(topo2D, "", name))]
@@ -111,7 +111,7 @@ Ugrid <- R6::R6Class(
                 if (length(interfaceDimId) > 0) {
                     interfaceVars <- vars[(dim1 == interfaceDimId | dim2 == interfaceDimId |
                                                dim3 == interfaceDimId) &
-                                              !grepl("_coordinate$|_Numlimdt", standard_name)]
+                                              !grepl("_coordinate$", standard_name)]
                     interfaceDupStd <- interfaceVars[duplicated(standard_name), standard_name]
                     interfaceVars[standard_name %in% interfaceDupStd,
                                standard_name := paste0(standard_name, sub(topo2D, "", name))]
@@ -123,7 +123,7 @@ Ugrid <- R6::R6Class(
                 if (length(layerDimId) > 0) {
                     layerVars <- vars[(dim1 == layerDimId | dim2 == layerDimId |
                                                dim3 == layerDimId) &
-                                              !grepl("_coordinate$|_Numlimdt", standard_name)]
+                                              !grepl("_coordinate$", standard_name)]
                     layerDupStd <- layerVars[duplicated(standard_name), standard_name]
                     layerVars[standard_name %in% layerDupStd,
                                   standard_name := paste0(standard_name, sub(topo2D, "", name))]

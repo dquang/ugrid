@@ -101,31 +101,32 @@ HisNc <- R6::R6Class(
             private$readInfo()
         },
         #' @description
-        #' Read data for a variable and a list of stations
-        #' @param variable Name/ID of the variable
+        #' Read data for a variable.
+        #' @param variable Name or standard_name / long_name of the variable.
+        #' If variable is given as its name in the NetCDF, the parameter `at` will be ignored.
         #' @param at Name of the dimension in which the variable is located.
-        #' @param cache Logical. If TRUE, the whole data array of the variable will be stored in memory.
-        #' This parameter behaves as following:
-        #' * If TRUE, the cached data will be used, despite of how it was read, so maybe it is not exactly what you want.
-        #' * If FALSE, the cached data will be ignored and also erased.
+        #' @param force Logical. If TRUE, data will be read directly from the NetCDF-file and cached data will be replaced.
         #' @return An array.
-        getData = function(variable, at="cross_section", cache=TRUE) {
+        getData = function(variable, at="cross_section", force=FALSE) {
 
             ncVar <- self$getVarName(variable, at=at)
             if (!chkChr(ncVar)) {
                 warning("No variable found.")
                 return(NULL)
             }
-            if (cache) {
-                if (!is.null(self$data[[at]][[ncVar]])) {
-                    dta <- self$data[[at]][[ncVar]]
-                } else {
-                    dta <- RNetCDF::var.get.nc(self$nc, variable=ncVar)
-                    self$data[[at]][[ncVar]] <- dta
-                }
-            } else {
+            vTbl <- self$vars[name == ncVar]
+            if (is.null(self$data[[at]][[ncVar]]) | force) {
                 dta <- RNetCDF::var.get.nc(self$nc, variable=ncVar)
-                self$data[[at]][[ncVar]] <- NULL
+                # the data are stored not like the way they are described, at least for non-time data like
+                # cross_section_name
+                ndim <- length(dim(dta))
+                if ((ndim != vTbl$ndims) & vTbl$hasTime) {
+                    # TODO: check 3D data. This is only correct for 2D data.
+                    dta <- matrix(dta, ncol=length(self$ts))
+                }
+                self$data[[at]][[ncVar]] <- dta
+            } else {
+                dta <- self$data[[at]][[ncVar]]
             }
             return(dta)
         },
@@ -136,29 +137,29 @@ HisNc <- R6::R6Class(
         #' @param ids Character vector of IDs to get data. It will be ignored if the variable is only a single time serie.
         #' @param idNames Names to assign as column names for the IDs.
         #' @param aggFun A function to apply to all output-columns
-        #' @param cache Logical. If TRUE, the whole data array of the variable will be stored in memory.
-        #' This parameter behaves as following:
-        #' * If TRUE, the cached data will be used, despite of how it was read, so maybe it is not exactly what you want.
-        #' * If FALSE, the cached data will be ignored and also erased.
+        #' @param force Logical. If TRUE, data will be read directly from the NetCDF-file and cached data will be replaced.
         #' @return a data.table.
-        getData4Ids = function(variable, ids=NULL, idNames=ids, at="cross_section", aggFun=NULL, cache=TRUE) {
+        getData4Ids = function(variable, ids=NULL, idNames=ids, at="cross_section", aggFun=NULL, force=FALSE) {
 
             ncVar <- self$getVarName(variable=variable, at=at)
-            thisVar <- self$vars[name %in% ncVar]
-            if (!isTRUE(thisVar[, hasTime])) {
+            vTbl <- self$vars[name %in% ncVar]
+            if (!isTRUE(vTbl[, hasTime])) {
                 message("This function is only for reading time series.")
                 return(NULL)
             }
-            dta <- self$getData(variable=ncVar, at=at, cache=cache)
-            if (thisVar$ndims < 2)
+            dta <- self$getData(variable=ncVar, at=at, force=force)
+            if (vTbl$ndims < 2)
                 return(dta)
             else
                 dta <- t(dta)
-            dimName <- self$dims[id == thisVar$dim1, name]
-            idVar <- self$vars[grep(paste0("^", dimName, "[s]*_id$"), name), name]
+            dimName <- self$dims[id == vTbl$dim1, name]
+            patt <- paste0("^", dimName, "[s]*_id$") |>
+                stringi::stri_replace_first_fixed("s[s]", "[s]")
+            idVar <- self$vars[grep(patt, name), name]
             if (!chkChr(idVar))
                 idVar <- self$vars[grep(paste0("^", dimName, "[s]*_name$"), name), name]
-            varIds <- RNetCDF::var.get.nc(self$nc, idVar)
+            varIds <- RNetCDF::var.get.nc(self$nc, idVar) |>
+                trimws() # Delf3D-FM writes extra spaces after the names
             if (length(ids) < 1)
                 ids <- varIds
             idx <- which(varIds %in% ids)
@@ -189,8 +190,9 @@ HisNc <- R6::R6Class(
 
             ncVar <- self$vars[grepl(variable, name, ignore.case=TRUE), name]
             if (!chkChr(ncVar)) {
-                pat <- paste0("^", at, "[s]*$")
-                dimId <- self$dims[grepl(pat, name), id]
+                patt <- paste0("^", at, "[s]*$") |>
+                    stringi::stri_replace_first_fixed("s[s]", "[s]")
+                dimId <- self$dims[grepl(patt, name), id]
                 if (length(dimId) != 1) {
                     warning(at, " is not one of the dimension names or ambiguous")
                     return(NULL)
@@ -211,25 +213,29 @@ HisNc <- R6::R6Class(
             return(ncVar)
         },
         #' @description
-        #' Read information about simulation time and timesteps.
+        #' Read information about time series.
         getTsInfo = function() {
             tsIds <- self$tsIds
             locations <- gsub("_name$|_id$", "", tsIds)
-            patts <- paste0("^", locations, "[s]*$") |>
-                paste0(collapse="|")
-            dimIds <- sapply(locations, function(x) self$dims[grepl(paste0("^", x, "[s]*$"), name), id])
+            dimIds <- sapply(locations, function(x) {
+                patt <- paste0("^", x, "[s]*$") |>
+                    stringi::stri_replace_first_fixed("s[s]", "[s]")
+                self$dims[grepl(patt, name), id]
+                })
             varTbl <- lapply(seq_along(dimIds), function(i) {
-                vNames <- self$vars[(dim1 == dimIds[i] | dim2 == dimIds[i]) & (hasTime == TRUE), name]
-                vTbl <- data.table::data.table(varName=vNames)
+                vTbl <- self$vars[(dim1 == dimIds[i] | dim2 == dimIds[i]) & (hasTime == TRUE),
+                                    c("name", "standard_name", "long_name", "unit", "hasTime")]
                 vTbl$location <- locations[i]
                 vTbl
-                }) |> rbindlist()
+                }) |> data.table::rbindlist()
             idTbl <- lapply(seq_along(tsIds), function(i) {
-                vNames <- self$getData(tsIds[i])
+                vNames <- self$getData(variable=tsIds[i]) |>
+                    trimws()
                 vTbl <- data.table::data.table(id=vNames)
                 vTbl$location <- locations[i]
                 vTbl
-            }) |> rbindlist()
+            }) |> data.table::rbindlist()
+
             idTbl[nchar(id) < 1]
             return(list(varTbl=varTbl, idTbl=idTbl))
         },
@@ -258,6 +264,3 @@ HisNc <- R6::R6Class(
     )
 )
 
-getData4Ids <- function(hisLst, variable, ids=NULL, idNames=ids, at="cross_section", aggFun=NULL, cache=TRUE) {
-    ret <- list()
-}

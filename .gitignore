@@ -7,4 +7,5 @@ man
 NAMESPACE
 **/img
 rosm.cache
-
+inst/testdata
+*.Rproj

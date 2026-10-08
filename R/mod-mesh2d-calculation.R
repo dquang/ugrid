@@ -583,7 +583,7 @@ map2dCalcServer <- function(id, cman) {
             pid <- session$ns("")
             progress$set(value=0.7, message="Sending the task to a background process...")
             promises::future_promise(
-                ugrid:::prepareData4Download(mdta1=mdta1, mdta2=mdta2, iline1=iline1,
+                ugrid::prepareData4Download(mdta1=mdta1, mdta2=mdta2, iline1=iline1,
                                              iline2=iline2, fids=fids, pid=pid, lgT1=lgT1, lgT2=lgT2)
             ) |>
                 promises::then(

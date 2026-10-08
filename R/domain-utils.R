@@ -24,7 +24,7 @@ genDomainBbox <- function(path, pattern=getOption("ugrid.pattern")) {
                             function(x) RNetCDF::att.get.nc(nc, variable="NC_GLOBAL", attribute=x))
         isUgrid <- any(grepl("UGRID", globalAtt, ignore.case = TRUE))
         if (isUgrid) {
-            attTbl <- ugrid:::getAllAtts(nc=nc)
+            attTbl <- ugrid::getAllAtts(nc=nc)
             nodeCoords <- attTbl[grepl("node_coordinates", name), val] |>
                 strsplit(" ", fixed=TRUE) |> unlist()
             xRange <- RNetCDF::var.get.nc(nc, nodeCoords[1]) |> range()

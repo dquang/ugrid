@@ -74,6 +74,11 @@ map2dUi <- function(id) {
                                                      choices=character(0), multiple=TRUE, search=TRUE)
                 ),
                 bslib::accordion_panel(
+                    title="Land-Water-Boundary", icon=shiny::icon("earth-oceania"),
+                    shiny::actionButton(ns("genLWB"), "Generating Land-Water-Boundary..."),
+                    shiny::downloadButton(ns("dlLWB"), "Download Land-Water-Boundary!")
+                ),
+                bslib::accordion_panel(
                     title="Export data", icon=shiny::icon("file-export"),
                     shiny::actionButton(ns("prepDl"), "Prepare data for downloading..."),
                     shiny::downloadButton(ns("dlMap"), "Download map data!")
@@ -126,6 +131,7 @@ map2dServer <- function(id, cman) {
         map2dCmp <- shiny::reactiveVal()
         map2dVec <- shiny::reactiveVal()
         gpkgFile <- shiny::reactiveVal()
+        lwb <- shiny::reactiveVal()
 
         observeEvent(input$findDomains, {
             progress <- shiny::Progress$new()
@@ -744,6 +750,89 @@ map2dServer <- function(id, cman) {
         output$map2dVector <- mapgl::renderMaplibre({
             map2dVec()
         })
+
+        shiny::observeEvent(input$genLWB, {
+            progress <- shiny::Progress$new()
+            on.exit(progress$close())
+            selectedCases <- input$cases1[nchar(input$cases1) > 0]
+            hashes <- cman$tbl[caseName %in% selectedCases, hash]
+            nCore <- max(ceiling(parallel::detectCores() * 0.75), 2)
+            doParallel::registerDoParallel(cores =nCore)
+            `%dopar%` <- foreach::`%dopar%`
+            tbl <- data.table::copy(cman$tbl)
+            if (length(hashes) > 0) {
+                progress$set(value=0.3, message=paste0("Reading data from: ",
+                                                       length(hashes), " domains. It will take a while..."))
+                wtPolLst <- foreach::foreach(aH=hashes, .combine=c) %dopar% {
+                    aM <- Ugrid$new(tbl[hash==aH, path], crs=tbl[hash==aH, crsid])
+                    cName <- tbl[hash == aH, caseName]
+                    pol <- aM$buildFace2DPoly()
+                    wl <- aM$getData4Face2D("sea_surface_height", lyr=1L)
+                    bl <- aM$getData4Face2D("altitude", lyr=1L)
+                    wl <- rowAgg("max")(wl)
+                    wd <- wl - bl
+                    wd[wd < 1e-9]  <- -1
+                    wd[wd > 0] <- 1
+                    pol$isWater <-  wd
+                    pol$caseName <- cName
+                    list(pol)
+                }
+                wtPol <- data.table::rbindlist(wtPolLst) |>
+                    sf::st_as_sf()
+                sf::st_geometry(wtPol) <- "geometry"
+                wtPol <- sf::st_make_valid(wtPol) |>
+                    dplyr::group_by(isWater, caseName) |>
+                    dplyr::summarize()
+                lwb(wtPol)
+                progress$set(value=0.3, message="Land-water-boundary was generated!
+                             isWater < 0 means land otherwise water.")
+                shinyjs::show(id="map2d-card")
+                shinyjs::hide(id="map2d-cmp-card")
+                shinyjs::hide(id="map2d-vector-card")
+                shinyjs::enable(id="dlLWB")
+                if (is.na(sf::st_crs(wtPol))) {
+                    shiny::showNotification(
+                    "The project does not have a CRS,
+                    therefore the land-water-boundary will not be displayed but it is still downloadable.")
+                    return(NULL)
+                }
+                if (inherits(map2d(), "maplibregl")) {
+                    mapgl::maplibre_proxy("map2d") |>
+                        mapgl::clear_controls() |>
+                        mapgl::add_fill_layer(
+                            id="lwb", source=wtPol, fill_opacity=0.7, tooltip="isWater",
+                            fill_color=mapgl::interpolate(
+                                column="isWater",
+                                values=c(-1, 1),
+                                stops=c("#F0CCC4", "#308CCC")
+                            )
+                        )
+                } else {
+                    map1 <- mapgl::maplibre(bounds=wtPol) |>
+                        mapgl::add_fill_layer(
+                        id="lwb", source=wtPol, fill_opacity=0.7, tooltip="isWater",
+                        fill_color=mapgl::interpolate(
+                            column="isWater",
+                            values=c(-1, 1),
+                            stops=c("#F0CCC4", "#308CCC")
+                        )
+                    )
+                    map2d(map1)
+                }
+            }
+        })
+
+        output$dlLWB <- shiny::downloadHandler(
+            filename="land-water-bnd.gpkg",
+            contentType="application/geopackage",
+            content=function(file) {
+                pol <- lwb()
+                if (inherits(pol, "sf"))
+                    sf::st_write(pol, dsn=file)
+                else
+                    shiny::showNotification("You have to select case(s) and generate Land-water-boundary first!")
+            }
+        )
 
         shiny::observeEvent(input$prepDl, {
 

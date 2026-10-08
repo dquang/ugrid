@@ -42,7 +42,8 @@ appUi <- function(request) {
          uiResultMap(),
          uiRasterCalculation(),
          uiResultGraphic(),
-         uiResultLayer()
+         uiResultLayer(),
+         uiResultTs()
         )
 }
 
@@ -86,8 +87,8 @@ uiHome <- function() {
                            style='height: 150px; width: 300px; font-size: 20px')),
                 column(3,
                        actionButton(
-                           inputId = "btnH2Sta", label=HTML("<br> Results at Station"),
-                           icon=icon(name="archive", "fa-3x"), disabled = TRUE,
+                           inputId = "btnH2Sta", label=HTML("<br> Time-series results"),
+                           icon=icon(name="archive", "fa-3x"),
                            style='height: 150px; width: 300px; font-size: 20px')),
                 column(3,
                        actionButton(
@@ -218,6 +219,13 @@ uiResultLayer <- function() {
     )
 }
 
+uiResultTs <- function() {
+    bslib::nav_panel(
+        title = "Time-series results", value = "tpTimeSeries",
+        his2dLineUi("retTs")
+    )
+}
+
 appServer <- function(input, output, session) {
 
     # increasing max filesize to upload to 100Mb
@@ -232,11 +240,11 @@ appServer <- function(input, output, session) {
     ctbl <- rbind(ctbl, data.table::data.table(caseName=paste0("Example_", basename(sampleCases)),
                                                casePath=sampleCases))
     shiny::updateSelectizeInput(inputId="moreCase", choices=ctbl$caseName, server=TRUE)
-# Tours -----------------------------------------------------------------------------------------------------------
     map2dServer(id="retMap", cman=cman)
     map2dCalcServer(id="raster", cman=cman)
     map2dLineServer(id="retLine", cman=cman)
     map2dLayerServer(id="retLayer", cman=cman)
+    his2dLineServer(id="retTs", cman=cman)
     shiny::observeEvent(input$btnH2Map, {
         bslib::nav_select(id="navbar", selected="tpMap")
     })
@@ -251,6 +259,9 @@ appServer <- function(input, output, session) {
     })
     shiny::observeEvent(input$btnH2Layer, {
         bslib::nav_select(id="navbar", selected="tpLayer")
+    })
+    shiny::observeEvent(input$btnH2Sta, {
+        bslib::nav_select(id="navbar", selected="tpTimeSeries")
     })
     shiny::observeEvent(input$featFile, {
         fInfo <- isolate(input$featFile) |> data.table::as.data.table()
@@ -330,6 +341,7 @@ appServer <- function(input, output, session) {
             thisCrs <- ifelse (chkChr(input$crs), input$crs, NA_character_)
             addCases(caseLst=caseLst, cman=cman, crs=thisCrs, ignoreCrsInFile=!input$keepCrs,
                      initUgrid = input$initUgrid)
+            addHis(caseLst=caseLst, cman=cman)
         }
     })
     shiny::observeEvent(input$addSelectedCase, {
@@ -338,6 +350,7 @@ appServer <- function(input, output, session) {
             names(caseLst) <- ctbl[caseName %in% input$moreCase, caseName]
             thisCrs <- ifelse (chkChr(input$crs), input$crs, NA_character_)
             addCases(caseLst=caseLst, cman=cman, crs=thisCrs, ignoreCrsInFile=!input$keepCrs, initUgrid = input$initUgrid)
+            addHis(caseLst=caseLst, cman=cman)
         }
     })
     shiny::observeEvent(input$updateCrs, {
@@ -387,8 +400,9 @@ appServer <- function(input, output, session) {
 
 #' A shiny app for observing ugrid data stored in NetCDF files
 #'
+#' @param options list of options for `shiny::shinyApp`
 #' @export
-ugridApp <- function(...) {
+ugridApp <- function(options=list()) {
     tmap::tmap_mode("view")
-    shiny::shinyApp(ui=appUi, server=appServer, ...)
+    shiny::shinyApp(ui=appUi, server=appServer, options=options)
 }

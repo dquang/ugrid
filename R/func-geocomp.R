@@ -60,7 +60,7 @@ calcIsolineData <- function(dta, tsName=NULL) {
 }
 
 genContourGif <- function(tbl, fps=12, fname=tempfile(fileext=".gif"), xRange=c(0, 65), xReverse=TRUE,
-                          xName="Distance from Brünsbuttel [km]",
+                          xName="Distance from Bruensbuttel [km]",
                           yName="Depth [m]",
                           nClass=7, style="kmeans", colPal="blue_teal",
                           fixedClass=NULL,
@@ -104,7 +104,7 @@ genContourGif <- function(tbl, fps=12, fname=tempfile(fileext=".gif"), xRange=c(
 }
 
 genContourFacets <- function(tbl, tsIds, xRange=c(0, 65), xReverse=FALSE,
-                          xName="Distance from Brünsbuttel [km]",
+                          xName="Distance from Bruensbuttel [km]",
                           yName="Depth [m]",
                           nClass=7, style="kmeans", colPal="blue_teal",
                           fixedClass=NULL,

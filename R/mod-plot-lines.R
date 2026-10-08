@@ -10,23 +10,23 @@ modPlotLineUi <- function(id) {
                 bslib::accordion_panel(
                     title="Data source", icon=shiny::icon("folder-open"),
                     shiny::h4("Cases"),
-                    shiny::selectInput(ns("ncVar1"), "Variable", choices=""),
-                    shiny::selectizeInput(ns("tsIdx1"), "Time step", choices=""),
+                    shiny::selectInput(ns("ncVar1"), "Variable", choices=character(0)),
+                    shiny::selectizeInput(ns("tsIdx1"), "Time step", choices=character(0)),
                     shiny::radioButtons(ns("agg1"), "Aggregation method",
                                         choices=c("none", "min", "max", "mean"), inline=TRUE),
                     shinyWidgets::virtualSelectInput(
                         ns("ncNames1"), "NetCDF files / domains",
-                        choices="", multiple=TRUE, search=TRUE, updateOn="close"
+                        choices=character(0), multiple=TRUE, search=TRUE, updateOn="close"
                     ),
                     shiny::hr(),
                     shiny::h4("Reference case"),
-                    shiny::selectizeInput(ns("ncVar2"), "Variable", choices="", multiple=TRUE,
+                    shiny::selectizeInput(ns("ncVar2"), "Variable", choices=character(0), multiple=TRUE,
                                           options=list(maxItems=1)),
-                    shiny::selectizeInput(ns("tsIdx2"), "Time step", choices=""),
+                    shiny::selectizeInput(ns("tsIdx2"), "Time step", choices=character(0)),
                     shiny::radioButtons(ns("agg2"), "Aggregation method",
                                         choices=c("none", "min", "max", "mean"), inline=TRUE),
                     shinyWidgets::virtualSelectInput(ns("ncNames2"), "NetCDF files / domains",
-                                                     choices="", multiple=TRUE, updateOn="close")
+                                                     choices=character(0), multiple=TRUE, updateOn="close")
                 ),
                 bslib::accordion_panel(
                     title="Classification & Symbology", icon=shiny::icon("gears"),

@@ -77,11 +77,13 @@ displayColors <- function(val) {
 #' @param y1Range,y2Range Ranges of y1, y2 values.
 #' @param y1Name,y2Name Names of y1, y2 axes.
 #' @param nTick Number of ticks.
+#' @param fontSize Font size.
+#' @param fontFamily Font family.
 #' @returns List of axis-parameters to pass to `plotly::layout` function
 #' @export
 createAxisLayout <- function(y1Range, y2Range=NULL,
                              y1Name="W", y2Name="Q",
-                             nTick=6) {
+                             nTick=6, fontSize=14, fontFamily="Arial") {
 
     y1Range <- range(y1Range, na.rm=T)
     y2Range <- range(y2Range, na.rm=T)
@@ -106,12 +108,14 @@ createAxisLayout <- function(y1Range, y2Range=NULL,
             dtick=ay2Lst$y1Dtick,
             tick0=ay2Lst$y1Breaks[1],
             tickmode="linear",
-            title=list(text=y1Name)
+            tickfont=list(size=fontSize, family=fontFamily),
+            title=list(text=y1Name, font=list(size=fontSize, family=fontFamily))
         )
         ay2 <- list(
-            title=list(text=y2Name),
+            title=list(text=y2Name, font=list(size=fontSize, family=fontFamily)),
             showticklabels=TRUE,
             overlaying="y",
+            tickfont=list(size=fontSize, family=fontFamily),
             range=ay2Lst$y2Range,
             dtick=ay2Lst$y2Dtick,
             tick0=ay2Lst$y2Breaks[1],

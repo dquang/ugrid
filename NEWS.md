@@ -31,3 +31,5 @@
 
 * corrected data slicing (face-data a long a line)
 
+# ugrid 0.1.7
+* bring back "_Numlimdt" parameter.
