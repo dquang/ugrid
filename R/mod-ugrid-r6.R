@@ -88,9 +88,12 @@ Ugrid <- R6::R6Class(
                 node2DVarStdNames$node_x <- m2DTopo$node_coordinates[1]
                 node2DVarStdNames$node_y <- m2DTopo$node_coordinates[2]
                 edge2DDimId <- dims[name == m2DTopo$edge_dimension, id]
-                edge2DVars <- vars[ndims == 1 &
+                edge2DVars <- rbind(vars[ndims == 1 &
                                        (dim1 == edge2DDimId | dim2 == edge2DDimId | dim3 == edge2DDimId) &
-                                       !grepl("_coordinate$", standard_name)]
+                                       !grepl("_coordinate$", standard_name)],
+                                    vars[ndims == 2 &
+                                       (dim1 == edge2DDimId | dim2 == edge2DDimId | dim3 == edge2DDimId) &
+                                       hasTime == TRUE])
                 edge2DVarStdNames <- as.list(edge2DVars$name)
                 names(edge2DVarStdNames) <- edge2DVars$standard_name
                 edge2DVarStdNames$edge_x <- m2DTopo$edge_coordinates[1]
@@ -276,6 +279,17 @@ Ugrid <- R6::R6Class(
         #' @param variable Character of standard name (UGRID) or name of the variable.
         #' @param topo Topology (m1D, m2D, or m3D).
         #' @param at Type of elements (node, edge, face, interface, layer, or volume).
+        #' @examples
+        #' # generate Ugrid Object
+        #' file <- system.file("testdata/d3dfm/elbe2d/FlowFM_0001_map.nc", package = "ugrid")
+        #' UgridObj <-  Ugrid$new(file)
+        #' # df with all vars in nc
+        #' UgridObj$vars
+        #' # get Ugrid name of this variable
+        #' UgridObj$getVarName(variable = "sea_surface_height", topo = "m2D", at = "face")
+        #' UgridObj$getVarName(variable = "altitude", topo = "m2D", at = "face")
+        #' UgridObj$getVarName(variable = "altitude", topo = "m2D", at = "node")
+        #' UgridObj$getVarName(variable = "mesh2d_cftrt", topo = "m2D", at = "edge")
         getVarName = function(variable,
                               topo=c("m2D", "m1D", "m3D"),
                               at=c("face", "node", "edge", "volume", "interface", "layer")) {
@@ -293,7 +307,7 @@ Ugrid <- R6::R6Class(
                         ncVar <- vars[grepl(variable, long_name, ignore.case=TRUE), name]
                         if (!chkChr(ncVar)) {
                             message("Variable with name: ", variable,
-                                    " does not found or the name is ambigious. Result: ",
+                                    " does not found or the name is ambigiuous. Result: ",
                                     paste(ncVar, collapse=","))
                             ncVar <- NULL
                         }
@@ -358,15 +372,24 @@ Ugrid <- R6::R6Class(
         },
         #' @description
         #' Read data at faces of 2D-Topology
+        #' Wrapper for `Method getData4Any()`
         #' @param variable Character of standard name (UGRID) or name of the variable.
         #' @param lyr layer or interface indexes, or "all" for the whole dataset.
         #' @param onlyMain If TRUE, the cell elements of other domains will be removed.
         #' @param force Logical. Force to read from NetCDF or first get from cache?
         #' @param ... will be forwarded to `RNetCDF::var.get.nc`
+        #' @examples
+        #' # generate Ugrid Object
+        #' file <- system.file("testdata/d3dfm/elbe2d/FlowFM_0001_map.nc", package = "ugrid")
+        #' UgridObj <-  Ugrid$new(file)
+        #' # Wrapper to function getData4Any, writes data to table in UgridObj$data2D$face$sea_surface_height
+        #' UgridObj$getData4Face2D("sea_surface_height")
+        #' dim(UgridObj$data2D$face$sea_surface_height)
+        #' # Get data for main domain
+        #' main <- UgridObj$getData4Face2D("sea_surface_height", onlyMain = TRUE)
+        #' dim(main)
         getData4Face2D = function(variable, lyr="all", onlyMain=FALSE, force=FALSE, ...) {
-
             ret <- self$getData4Any(variable=variable, lyr=lyr, force=force, topo="m2D", at="face", ...)
-
             if (onlyMain & chkChr(self$m2D$face$cell_domain_number)) {
                 self$readDomainInfo()
                 nd <- length(dim(ret))
@@ -437,7 +460,6 @@ Ugrid <- R6::R6Class(
                     dta <- dta[lyr, , ]
                 }
             }
-
             invisible(dta)
         },
         #' @description

@@ -9,3 +9,4 @@ NAMESPACE
 rosm.cache
 inst/testdata
 *.Rproj
+inst/doc

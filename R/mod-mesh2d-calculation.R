@@ -14,7 +14,7 @@ map2dCalcUi <- function(id) {
                 bslib::accordion_panel(
                     title="Data source", icon=shiny::icon("folder-open"),
                     shiny::textInput(ns("resolution"), label="Raster resolution",
-                                     placeholder="one ore two numbers seperated by a space for raster resolution"),
+                                     placeholder="one or two numbers seperated by a space for raster resolution"),
                     shiny::hr(),
                     shiny::h4("First raster parameters"),
                     shiny::p("To update the values for variables and time step, please select a case below."),
@@ -313,6 +313,11 @@ map2dCalcServer <- function(id, cman) {
             resolution <- txt2NumVec(input$resolution)
             vName <- selectedMeshes[[1]]$getVarName(ncVar1)
             varUnit <- selectedMeshes[[1]]$vars[name == vName, unit]
+            hasTime <- selectedMeshes[[1]]$vars[name == vName, hasTime]
+            if (!hasTime) {
+                shiny::showNotification("Choose time dependent variable!")
+                return(NULL)
+            }
             shiny::updateSliderInput(inputId="tsIdxAni", max=selectedMeshes[[1]]$totalTs)
             shiny::showNotification("The rasters will be processed in the background. You will be informed when it has been done.")
             shinyjs::disable("genAll")
@@ -323,7 +328,7 @@ map2dCalcServer <- function(id, cman) {
             lyr <- input$lyr
             promises::future_promise(
                 expr=ugrid::genRaster4All(mesh=selectedMeshes, variable=ncVar1, lyr=lyr,
-                                          folder=tmpFolder, dryAsNa=dryAsNa),
+                                          folder=tmpFolder, resolution=resolution, dryAsNa=dryAsNa),
                 seed=TRUE
             ) |>
                 promises::then(
