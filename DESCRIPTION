@@ -1,6 +1,6 @@
 Package: ugrid
 Title: Postprocessing for NetCDF-Data in UGRID-Format
-Version: 0.1.7
+Version: 0.1.8
 Authors@R: c(
     person("Quang", "Duong", , "duong@bafg.de", role = c("aut", "cre")),
     person("Asta", "Kunkel", role = "ctb")
@@ -22,10 +22,9 @@ Roxygen: list(markdown = TRUE)
 Suggests: 
     DBI,
     geometa,
-    ggnimate,
-    leaflet.extras,
     httr,
     knitr,
+    leaflet.extras,
     rmarkdown
 Imports: 
     akima,
@@ -34,7 +33,13 @@ Imports:
     cols4all,
     data.table,
     digest,
+    dplyr,
+    doParallel, 
+    foreach,
+    future, 
     ggplot2,
+    gganimate,
+    leaflet, 
     mapgl,
     matrixStats,
     plotly,
@@ -50,10 +55,6 @@ Imports:
     shinyWidgets,
     stringi,
     terra, 
-    leaflet, 
-    foreach,
-    doParallel, 
-    future, 
     tmap
 Config/roxygen2/version: 8.1.0
 VignetteBuilder: knitr

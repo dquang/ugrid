@@ -131,7 +131,7 @@ uiSetting <- function() {
 
     sbVer <- shiny::markdown(
         paste0("Package ", "`ugrid`", " Version: *",
-               packageVersion("ugrid"), "* - erstellt am: *",
+               packageVersion("ugrid"), "* - created on: *",
                packageDate("ugrid"), "*")
         )
     bslib::nav_panel(

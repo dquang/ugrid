@@ -15,14 +15,14 @@ getVarTbl = function(nc = NULL){
     }
     ncInfo <- RNetCDF::file.inq.nc(nc)
     varTbl <- lapply(0:(ncInfo$nvars - 1), function(v) {RNetCDF::var.inq.nc(nc, variable=v)})
-    varTbl <- rbindlist(varTbl, fill = TRUE)
-    varTbl <- rbind(varTbl, data.table(id=ncInfo$nvars + 1,
+    varTbl <- data.table::rbindlist(varTbl, fill = TRUE)
+    varTbl <- rbind(varTbl, data.table::data.table(id=ncInfo$nvars + 1,
                                        name="NC_GLOBAL",
                                        ndims=0,
                                        natts=ncInfo$ngatts),
                     fill=TRUE)
     varTbl[, dimIdx := paste0("dim", 1:.N), by="name"]
-    varTbl <- dcast(varTbl, id + name + type + ndims + natts ~ dimIdx, value.var="dimids")
+    varTbl <- data.table::dcast(varTbl, id + name + type + ndims + natts ~ dimIdx, value.var="dimids")
     # make sure there are three columns of dimensions
     dimCols <- c("dim1", "dim2", "dim3")
     dimCols <- dimCols[! dimCols %in% colnames(varTbl)]
@@ -51,7 +51,7 @@ getDimTbl = function(nc = NULL){
     }
     ncInfo <- RNetCDF::file.inq.nc(nc)
     dimTbl <- lapply(0:(ncInfo$ndims - 1), function(d) RNetCDF::dim.inq.nc(nc, dimension=d))
-    dimTbl <- rbindlist(dimTbl, fill=TRUE)
+    dimTbl <- data.table::rbindlist(dimTbl, fill=TRUE)
     if (toClose)
         RNetCDF::close.nc(nc)
     return(dimTbl)
@@ -82,7 +82,7 @@ getAllAtts <- function(nc) {
             next
         attLst <- sapply(seq.int(0, natt - 1, 1),
                          FUN = function(x) unlist(RNetCDF::att.inq.nc(nc, aV, x))) |>
-            t() |> as.data.table()
+            t() |> data.table::as.data.table()
         attValLst <- sapply(seq.int(0, natt - 1, 1),
                             FUN = function(x) {
                                 vi <- RNetCDF::att.get.nc(nc, aV, x)
@@ -95,7 +95,7 @@ getAllAtts <- function(nc) {
         attLst[, varName := aV]
         varAtts[[aV]] <- attLst
     }
-    varAtts <- rbindlist(varAtts, fill=TRUE)
+    varAtts <- data.table::rbindlist(varAtts, fill=TRUE)
     if (toClose)
         RNetCDF::close.nc(nc)
     return(varAtts)

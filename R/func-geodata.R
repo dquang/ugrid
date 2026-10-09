@@ -25,14 +25,14 @@ readPli <- function(path, crs=sf::NA_crs_) {
         warning("File not found: ", path)
         return(NULL)
     }
-    tbl <- fread(file=path, sep="\n", header=FALSE, blank.lines.skip=TRUE)
+    tbl <- data.table::fread(file=path, sep="\n", header=FALSE, blank.lines.skip=TRUE)
     tbl <- tbl[!grepl("^\\*", V1)]
     if (nrow(tbl) < 4) {
         warning("Not enough information in the file: ", path)
         return(NULL)
     }
     tbl[, V1 := stringi::stri_trim_both(V1)][, V1 := stringi::stri_replace_all_regex(V1, " +", " ")]
-    tbl[, crInfo := shift(V1, n=-1)]
+    tbl[, crInfo := data.table::shift(V1, n=-1)]
     tbl[, npts := as.integer(stringi::stri_match_first_regex(crInfo, "(^\\d+) ")[, 2])]
     i <- 1L
     totalRow <- nrow(tbl)
@@ -47,7 +47,7 @@ readPli <- function(path, crs=sf::NA_crs_) {
         hasZ <- ifelse(nDim[2] > 2, TRUE, FALSE)
         # if there are more than 3 columns, the exceeded columns will be ignored.
         # if there are less than 3 columns, they will be recycled.
-        tbl[(i + 2):(nextRow - 1), c("X", "Y", "Z") := tstrsplit(V1, split=" "), by=V1]
+        tbl[(i + 2):(nextRow - 1), c("X", "Y", "Z") := data.table::tstrsplit(V1, split=" "), by=V1]
         if (hasZ)
             anyZ <- TRUE
         else

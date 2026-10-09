@@ -328,11 +328,6 @@ map2dLayerServer <- function(id, cman) {
             progress <- shiny::Progress$new()
             on.exit(progress$close())
             progress$set(value=0.3, message="Reading general information for the project.")
-            if (!"b33c21d09941aa9213cb046a10b7ce68" %in% cman$layer$id) {
-                nokAchse <- sf::st_read(dsn=system.file("geodata.gpkg", package="ugrid"), layer="NOK_river_axis") |>
-                    sf::st_set_geometry("geometry") |> sf::st_zm(drop=TRUE)
-                cman$layer <- rbind(cman$layer, nokAchse)
-            }
             addedHash <- names(cman$ugrids)
             intHash <- intersect(addedHash, caseHash)
             sampleHash <- if (length(intHash) > 0) intHash[1] else caseHash[1]

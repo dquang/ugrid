@@ -1,7 +1,4 @@
 #' Prepare a simple table of colors based on `cols4all::c4a_table`
-#' @param filters Filter apply to table of palettes. Possible values are:
-#' `cbf` for colorblind-friendly, `fair` for fairness, `crW` for sufficient contrast ratio with white
-#' `crB` for sufficient contrast ratio with  black.
 #' @keywords internal
 getC4aTable <- function(
     type=c("all", "cat", "seq", "div", "cyc"),
@@ -48,11 +45,6 @@ getC4aTable <- function(
 
 
 #' Generate HTML content for `shinyWidgets::picketInput`
-#'
-#' @param palTbl Table of palettes created by `getC4aTable`
-#' @param continuous Logical value for displaying the colors as a color gradient
-#' @param width Width of color blocks
-#' @param minWidth,maxWidth Minimum and maximum widths of the color gradient
 #' @keywords internal
 genPaletteContent <- function(palTbl, continuous=FALSE, width="2em",
                               minWidth="20em", maxWidth="40em", reverse=FALSE) {
@@ -97,20 +89,13 @@ genPaletteContent <- function(palTbl, continuous=FALSE, width="2em",
 }
 
 #' An modified version of `shinyWidgets::pickerInput`
-#'
-#' This is a specisialised version of `shinyWidgets::pickerInput` for choosing color palettes
-#' @param inputId,label,... Parameters for `shinyWidgets::pickerInput`
-#' @seealso [shinyWidgets::pickerInput()]
-#' @param type,n,m,sort,series,filters,range,continuous  Parameters for `cols4all::c4a_table`
-#' @param reverse Should color palettes be reversed?
-#' @seealso [cols4all::c4a_table()]
-#' @rdname colorPaletteInput
-#' @export
+#' @keywords internal
 colorPaletteInput <- function(
     inputId,
     label=NULL, n=5, filters="none", series=c("tableau", "brewer", "cols4all", "matplotlib"),
     type=c("cat", "seq"), range=NA, continuous=FALSE, reverse=FALSE,
     ...) {
+
     palTbl <- getC4aTable(
         type=type, n=n,
         filters=filters,
@@ -133,8 +118,7 @@ colorPaletteInput <- function(
 
 
 #' Update a `pickerInput` with color palettes
-#' @rdname colorPaletteInput
-#' @export
+#' @keywords internal
 updateColorPaletteInput <- function(
         session = getDefaultReactiveDomain(),
         inputId, palTbl,

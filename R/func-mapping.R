@@ -2,6 +2,7 @@
 #'
 #' @param pol A sf object.
 #' @param field The name of the column to use for classification.
+#' @param values values of the dataset.
 #' @param n Number of classes
 #' @param style Style of classification. One of: "fixed", "sd", "equal", "pretty", "quantile",
 #' "kmeans", "hclust", "bclust", "fisher", "jenks", "dpih", "headtails", "maximum", or "box".
@@ -13,6 +14,7 @@
 #' @param reverse Should the palette be reversed?
 #' @param legendTitle Legend title.
 #' @param legendWidth Width of the legend.
+#' @param legendPos Position of the legend.
 #' @param addControls Add some controls to the map?
 #' @param addLine Add polygon line?
 #' @param lineColor Line color of polygons.
@@ -22,11 +24,12 @@
 #' @export
 genMap <- function(
         pol, field, values=NA, n=5, style="kmeans", valClass=NULL,
-        colPal="seaborn.bright", colType="cat", mapId="map1", continuous=TRUE, reverse=FALSE,
+        colPal="seaborn.bright", colType="cat", mapId="map1",
+        continuous=TRUE, reverse=FALSE,
         legendTitle=field, legendWidth="300px", legendPos="top-left",
         addControls=FALSE, addLine=FALSE,
         lineColor="grey", lineWidth=0.1,
-        class=FALSE, rsf=NULL) {
+        rsf=NULL) {
 
     if (is.na(sf::st_crs(pol))) {
         pol <- squash2Bbox(pol, rsf=rsf)
@@ -100,26 +103,24 @@ genMap <- function(
 #' @param pol A sf object.
 #' @param field The name of the column to use for classification.
 #' @param n Number of classes
+#' @param values values of the dataset.
 #' @param style Style of classification. One of: "fixed", "sd", "equal", "pretty", "quantile",
 #' "kmeans", "hclust", "bclust", "fisher", "jenks", "dpih", "headtails", "maximum", or "box".
 #' @param valClass An object of the class `classIntervals` to set the classification manually
-#' @param colPal Full name of a color palette.
-#' @param colType Type of palette: "cat", "seq", "div" or "cyc".
 #' @param mapId ID of the map.
-#' @param reverse Should the palette be reversed?
+#' @param resolution Resolution of the raster.
 #' @param legendTitle Legend title.
 #' @param legendWidth Width of the legend.
+#' @param legendPos Position of the legend.
 #' @param addControls Add some controls to the map?
-#' @param addLine Add polygon line?
-#' @param lineColor Line color of polygons.
-#' @param lineWidth Line width of polygons.
+#' @param opacity Opacity of the legend.
 #' @param rsf a list of rescaling functions returned from `rescale` function.
 #' @returns An HTML widget for a Mapbox map.
 #' @export
 genRasterMap <- function(
         pol, field, values=NA, n=5, style="kmeans", valClass=NULL,
-        # colPal="seaborn.bright", colType="cat", reverse=FALSE,
-        mapId="map1", legendTitle=field, legendWidth="300px", legendPos="top-left", resolution=NULL,
+        mapId="map1", resolution=NULL,
+        legendTitle=field, legendWidth="300px", legendPos="top-left",
         addControls=FALSE, opacity=1.0, rsf=NULL) {
 
     if (is.na(sf::st_crs(pol))) {

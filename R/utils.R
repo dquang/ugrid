@@ -1,4 +1,3 @@
-#' @keywords internal
 fmtDe <- function(rdg, nsmall) {
     function(x) {
         format(round(x, rdg), decimal.mark=",", big.mark=".", nsmall=nsmall)
@@ -6,9 +5,10 @@ fmtDe <- function(rdg, nsmall) {
 }
 
 
-#' Convert character vector to POSIXct
+#' An extended version of `as.POSIXct` function.
 #'
-#' The input can have different formats, including german date-time format
+#' This version tries different date-time formats, included german one.
+#'
 #' @param x character vector
 #' @param tz Time zone
 #' @param origin Origin of the time series.
@@ -43,35 +43,6 @@ asPOSIXctManyFormats <- function(
 }
 
 
-#' Plot a graphic with horizontal lines using colors given by val
-#'
-#' @param val Named vector colors
-#' @export
-displayColors <- function(val) {
-    valID <- seq_along(val)
-    if (all(is.null(names(val))))
-        names(val) <- val
-    dta <- data.frame(y=valID, x=rep(1, length(valID)), value=names(val))
-    g <- ggplot2::ggplot(dta, ggplot2::aes(x=x, y=y, color=value)) +
-        ggplot2::geom_segment(size=3, mapping=ggplot2::aes(xend=x + 1, yend=y)) +
-        ggplot2::scale_color_manual(values=val) +
-        ggplot2::scale_y_reverse(
-            breaks=valID,
-            labels=mapply(paste0, val, " (", valID, ")"),
-            sec.axis=ggplot2::dup_axis(labels=names(val))
-        ) +
-        ggplot2::theme_bw() +
-        ggplot2::theme(
-            legend.position="none",
-            panel.border=ggplot2::element_blank(),
-            panel.grid=ggplot2::element_blank(),
-            axis.text.x=ggplot2::element_blank(),
-            axis.title=ggplot2::element_blank()
-        )
-    return(g)
-}
-
-
 #' Create axis list for plotly layout
 #'
 #' @param y1Range,y2Range Ranges of y1, y2 values.
@@ -79,8 +50,8 @@ displayColors <- function(val) {
 #' @param nTick Number of ticks.
 #' @param fontSize Font size.
 #' @param fontFamily Font family.
-#' @returns List of axis-parameters to pass to `plotly::layout` function
-#' @export
+#' @returns List of axis-parameters for the `plotly::layout` function.
+#' @keywords internal
 createAxisLayout <- function(y1Range, y2Range=NULL,
                              y1Name="W", y2Name="Q",
                              nTick=6, fontSize=14, fontFamily="Arial") {
@@ -123,16 +94,17 @@ createAxisLayout <- function(y1Range, y2Range=NULL,
             side="right"
         )
     }
+
     return(list(ay1=ay1, ay2=ay2))
 }
 
 
-#' generate nice scales for two parallel axis
+#' Generate nice scales for two graphic axes.
 #'
-#' @param y1 value vector or range of first axis
-#' @param y2 value vector or range of second axis
-#' @param rel should y2 always lower than y1?
-#' @export
+#' @param y1 value vector or range of the first axis.
+#' @param y2 value vector or range of the second axis.
+#' @param rel scale between to axes.
+#' @keywords internal
 createY2 <- function(y1, y2, n=5, rel = 1) {
 
     y1Range <- range(y1, na.rm=TRUE)
@@ -162,7 +134,7 @@ createY2 <- function(y1, y2, n=5, rel = 1) {
     return(ret)
 }
 
-#' @keywords internal
+
 blankPlotly <- function(e="Error while creating plot") {
 
     p <- plotly::plot_ly() |>
@@ -176,7 +148,7 @@ blankPlotly <- function(e="Error while creating plot") {
     return(p)
 }
 
-#' @keywords internal
+
 blankGgplot <- function(e="Error while creating plot") {
 
     g <- ggplot2::ggplot(
@@ -189,7 +161,7 @@ blankGgplot <- function(e="Error while creating plot") {
     return(g)
 }
 
-#' @keywords internal
+
 txt2NumVec <- function(x) {
 
     ret <- stringi::stri_replace_all_fixed(x, ",", ".") |>
@@ -202,12 +174,86 @@ txt2NumVec <- function(x) {
 }
 
 
+checkFuture <- function(feat) {
+
+    if (!future::resolved(feat))
+        return(FALSE)
+    res <- future::result(feat)
+    if (inherits(res$value, "error"))
+        return(FALSE)
+    chk <- any(sapply(res$conditions, function(x) inherits(x$condition, "error")))
+    if (chk)
+        return(FALSE)
+    return(TRUE)
+}
+
+
+# check if x is a single double and not NA
+chkDbl <- function(x) {
+    rlang::is_bare_numeric(x, n=1) & !rlang::is_na(x)
+}
+
+
+# check if x is a single integer and not NA
+chkInt <- function(x) {
+    rlang::is_bare_integer(x, n=1) & !rlang::is_na(x)
+}
+
+
+# check if x is a single integer and not NA
+chkChr <- function(x) {
+    isTRUE(nchar(x) > 0)
+}
+
+
+bb2Pol <- function(bb, id="bb1", crs=sf::st_crs()) {
+
+    bb <- as.list(bb)
+    pol <- data.frame(
+        x=c(bb[["xmin"]], bb[["xmax"]], bb[["xmax"]], bb[["xmin"]]),
+        y=c(bb[["ymin"]], bb[["ymin"]], bb[["ymax"]], bb[["ymax"]]),
+        pid=rep(id, 4)
+    ) |>
+        sfheaders::sf_polygon(x="x", y="y", linestring_id="pid", polygon_id="pid", close=FALSE)
+    sf::st_crs(pol) <- crs
+    return(pol)
+}
+
+
+bbLst2Pol <- function(bbLst, crs=sf::st_crs()) {
+
+    bbId <- paste0("bb_", seq_along(bbLst))
+    pol <- mapply(bb2Pol, bbLst, SIMPLIFY = FALSE) |>
+        rbindlist() |>
+        sf::st_as_sf(sf_column_name="geometry")
+    sf::st_crs(pol) <- crs
+    return(pol)
+}
+
+rowAgg <- function(agg=c("min", "max", "mean")) {
+    agg <- match.arg(agg)
+    ret <- switch(agg,
+                     "max" = function(x) {
+                         ret <- matrixStats::rowMaxs(x=x, na.rm=TRUE)
+                         ret[is.infinite(ret)] <- NaN
+                         ret
+                     },
+                     "min" = function(x) {
+                         ret <- matrixStats::rowMins(x=x, na.rm=TRUE)
+                         ret[is.infinite(ret)] <- NaN
+                         ret
+                     } ,
+                     "mean" = function(x) matrixStats::rowMeans2(x=x, na.rm=TRUE)
+    )
+    return(ret)
+}
+
+
 #' Look up river mileage for a table of points
 #'
 #' @param tbl Table of x, y coordinates
 #' @param crsid CRS-ID
-#' @param radius lookup radius
-#' @param riverSearchUrl,stationSearchUrl URLs to lookup service of WSV
+#' @param stationSearchUrl URLs to lookup service of WSV
 #' @export
 xy2station <- function(
         tbl, crsid=25832,
@@ -237,74 +283,5 @@ xy2station <- function(
         )
     }) |> data.table::rbindlist(fill=TRUE)
 
-    return(ret)
-}
-
-checkFuture <- function(feat) {
-
-    if (!future::resolved(feat))
-        return(FALSE)
-    res <- future::result(feat)
-    if (inherits(res$value, "error"))
-        return(FALSE)
-    chk <- any(sapply(res$conditions, function(x) inherits(x$condition, "error")))
-    if (chk)
-        return(FALSE)
-    return(TRUE)
-}
-
-# check if x is a single double and not NA
-chkDbl <- function(x) {
-    rlang::is_bare_numeric(x, n=1) & !rlang::is_na(x)
-}
-
-# check if x is a single integer and not NA
-chkInt <- function(x) {
-    rlang::is_bare_integer(x, n=1) & !rlang::is_na(x)
-}
-
-# check if x is a single integer and not NA
-chkChr <- function(x) {
-    isTRUE(nchar(x) > 0)
-}
-
-bb2Pol <- function(bb, id="bb1", crs=sf::st_crs()) {
-
-    bb <- as.list(bb)
-    pol <- data.frame(
-        x=c(bb[["xmin"]], bb[["xmax"]], bb[["xmax"]], bb[["xmin"]]),
-        y=c(bb[["ymin"]], bb[["ymin"]], bb[["ymax"]], bb[["ymax"]]),
-        pid=rep(id, 4)
-    ) |>
-        sfheaders::sf_polygon(x="x", y="y", linestring_id="pid", polygon_id="pid", close=FALSE)
-    sf::st_crs(pol) <- crs
-    return(pol)
-}
-
-bbLst2Pol <- function(bbLst, crs=sf::st_crs()) {
-
-    bbId <- paste0("bb_", seq_along(bbLst))
-    pol <- mapply(bb2Pol, bbLst, SIMPLIFY = FALSE) |>
-        rbindlist() |>
-        sf::st_as_sf(sf_column_name="geometry")
-    sf::st_crs(pol) <- crs
-    return(pol)
-}
-
-rowAgg <- function(agg=c("min", "max", "mean")) {
-    agg <- match.arg(agg)
-    ret <- switch(agg,
-                     "max" = function(x) {
-                         ret <- matrixStats::rowMaxs(x=x, na.rm=TRUE)
-                         ret[is.infinite(ret)] <- NaN
-                         ret
-                     },
-                     "min" = function(x) {
-                         ret <- matrixStats::rowMins(x=x, na.rm=TRUE)
-                         ret[is.infinite(ret)] <- NaN
-                         ret
-                     } ,
-                     "mean" = function(x) matrixStats::rowMeans2(x=x, na.rm=TRUE)
-    )
     return(ret)
 }

@@ -5,7 +5,7 @@
 #' @param uri URI to the file
 #' @param time A time stamp in POSIXct class
 #' @param title Title of the dataset
-#' @param name,organisation,position,email,street,city,postcode Contact information.
+#' @param name,org,position,email,phone,street,city,postcode,homepage Contact information.
 #' @param crsCode CRS code.
 #' @param crsCodeSpace CRS Codespace.
 #' @param abstract Abstract of the dataset.

@@ -16,7 +16,7 @@ Ugrid <- R6::R6Class(
             atts2 <- atts[grepl("^standard_name|^long_name|FillValue|^unit", name, ignore.case=TRUE),
                              c("name", "val", "varName")] |>
                 unique() |>
-                dcast(varName ~ name , value.var = "val")
+                data.table::dcast(varName ~ name , value.var = "val")
             vCols <- colnames(atts2) |>
                 stringi::stri_replace_all_regex("units", "unit", opts_regex=list(case_insensitive=TRUE)) |>
                 stringi::stri_replace_all_regex(".*FillValue$", "fill_value", opts_regex=list(case_insensitive=TRUE))
@@ -281,15 +281,16 @@ Ugrid <- R6::R6Class(
         #' @param at Type of elements (node, edge, face, interface, layer, or volume).
         #' @examples
         #' # generate Ugrid Object
-        #' file <- system.file("testdata/d3dfm/elbe2d/FlowFM_0001_map.nc", package = "ugrid")
-        #' UgridObj <-  Ugrid$new(file)
-        #' # df with all vars in nc
-        #' UgridObj$vars
+        #' library(ugrid)
+        #' mapFile <- system.file("testdata/d3dfm/elbe2d/FlowFM_0001_map.nc", package = "ugrid")
+        #' mesh <-  Ugrid$new(mapFile)
+        #' # data.table with all vars in nc
+        #' mesh$vars
         #' # get Ugrid name of this variable
-        #' UgridObj$getVarName(variable = "sea_surface_height", topo = "m2D", at = "face")
-        #' UgridObj$getVarName(variable = "altitude", topo = "m2D", at = "face")
-        #' UgridObj$getVarName(variable = "altitude", topo = "m2D", at = "node")
-        #' UgridObj$getVarName(variable = "mesh2d_cftrt", topo = "m2D", at = "edge")
+        #' mesh$getVarName(variable = "sea_surface_height", topo = "m2D", at = "face")
+        #' mesh$getVarName(variable = "altitude", topo = "m2D", at = "face")
+        #' mesh$getVarName(variable = "altitude", topo = "m2D", at = "node")
+        #' mesh$getVarName(variable = "mesh2d_cftrt", topo = "m2D", at = "edge")
         getVarName = function(variable,
                               topo=c("m2D", "m1D", "m3D"),
                               at=c("face", "node", "edge", "volume", "interface", "layer")) {
@@ -426,7 +427,7 @@ Ugrid <- R6::R6Class(
             } else {
                 dta <- RNetCDF::var.get.nc(self$nc, variable=ncVar, ...)
                 varDim <- self$vars[name == ncVar, .SD, .SDcols = data.table::patterns("^dim")]
-                varDim <- suppressWarnings(melt(varDim,
+                varDim <- suppressWarnings(data.table::melt(varDim,
                                                 measure.vars = list(dimId=1:3, dimName=4:6), variable.name = "tmp"))
                 varDim[, dimIdx := .I][, tmp := NULL]
                 varDim <- varDim[!is.na(dimId)]
@@ -551,7 +552,7 @@ Ugrid <- R6::R6Class(
             faceNode <- faceNode[!is.na(nodeID)]
             faceNode <- merge(faceNode, nodeTbl, by="nodeID")
             faceNode[, nodeID := NULL]
-            setorder(faceNode, faceID, variable)
+            data.table::setorder(faceNode, faceID, variable)
             facePolygon <- tryCatch(
                 sfheaders::sf_polygon(faceNode, x="X", y="Y", polygon_id="faceID", close=TRUE),
                 error=function(e) {
@@ -601,11 +602,11 @@ Ugrid <- R6::R6Class(
                 edgeNode <- edgeNode + 1
             edgeNode <- data.table::as.data.table(edgeNode)
             edgeNode[, edgeID := .I]
-            edgeNode <- melt(edgeNode, id.vars="edgeID", value.name="nodeID")
+            edgeNode <- data.table::melt(edgeNode, id.vars="edgeID", value.name="nodeID")
             edgeNode <- edgeNode[!is.na(nodeID)]
             edgeNode <- merge(edgeNode, nodeTbl, by="nodeID")
             edgeNode[, nodeID := NULL]
-            setorder(edgeNode, edgeID, variable)
+            data.table::setorder(edgeNode, edgeID, variable)
             edgeLine <- sfheaders::sf_linestring(edgeNode, x="X", y="Y", linestring_id="edgeID")
             sf::st_crs(edgeLine) <- self$crs
             if (self$tf)
@@ -632,9 +633,9 @@ Ugrid <- R6::R6Class(
                 warning("Couldn't find cell_domain_number variable.")
                 return(NULL)
             }
-            domainTbl <- data.table(cdn = cdnVal)
+            domainTbl <- data.table::data.table(cdn = cdnVal)
             domainTbl <- unique(domainTbl[, dCount := .N, by=cdn])
-            setorder(domainTbl, -dCount)
+            data.table::setorder(domainTbl, -dCount)
             # main cell domain number
             self$md <- domainTbl[1, cdn]
             # other neighbor domains

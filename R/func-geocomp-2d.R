@@ -10,7 +10,7 @@
 #' @param dryAsNa If TRUE (default), values for dried (waterlevel - elevation < 0) cells will be assigned NaN.
 #' @returns A sf object.
 #' @keywords internal
-getMapData <- function(mesh, variable, lyr=1L, tsIdx=1L, agg="none", onlyMain=FALSE, dryAsNa=TRUE) {
+getMapData <- function(mesh, variable, lyr=1L, tsIdx=1L, agg="none", force=FALSE, onlyMain=FALSE, dryAsNa=TRUE) {
 
     if (!is(mesh, "list"))
         mesh <- list(mesh)
@@ -19,13 +19,15 @@ getMapData <- function(mesh, variable, lyr=1L, tsIdx=1L, agg="none", onlyMain=FA
     tsIdx <- as.integer(tsIdx)
     if (length(mesh) < 4) {
         retLst <- lapply(mesh, function(x, ...) x$getData4Polygon(...),
-                         variable=variable, lyr=lyr, tsIdx=tsIdx, agg=agg, onlyMain=onlyMain, dryAsNa=dryAsNa)
+                         variable=variable, lyr=lyr, tsIdx=tsIdx,
+                         agg=agg, onlyMain=onlyMain, dryAsNa=dryAsNa, force=force)
     } else {
         nCores <- parallel::detectCores()
         doParallel::registerDoParallel(cores = parallel::detectCores() - 1)
         `%dopar%` <- foreach::`%dopar%`
         retLst <- foreach::foreach(x=mesh, .combine=c) %dopar% {
-            x$getData4Polygon(variable=variable, lyr=lyr, tsIdx=tsIdx, agg=agg, onlyMain=onlyMain, dryAsNa=dryAsNa)
+            x$getData4Polygon(variable=variable, lyr=lyr, tsIdx=tsIdx,
+                              agg=agg, onlyMain=onlyMain, dryAsNa=dryAsNa, force=force)
             list(x)
         }
     }

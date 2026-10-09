@@ -3,8 +3,10 @@
 #' @param x an integer vector of face indexes or an object of class `sf`.
 #' @param variable Character. Name of variable
 #' @param mesh an object of class `Ugrid`
+#' @param force if TRUE, the cached data will be read again.
+#' @param ... will be forwarded to `Ugrid$data4Face2D`
 #' @export
-getVerticalData <- function(x, variable, mesh, force = FALSE, ...) {
+getVerticalData <- function(x, variable, mesh, force=FALSE, ...) {
 
     chkLayer <- mesh$hasLayerData(variable=variable)
     if (!chkLayer) {
@@ -16,7 +18,7 @@ getVerticalData <- function(x, variable, mesh, force = FALSE, ...) {
     } else {
         faces <- x # we don't check or do any converting in this case.
     }
-    dta <- mesh$data4Face2D(variable = variable, force = force, ...)
+    dta <- mesh$data4Face2D(variable=variable, force=force, ...)
     dta <- dta[, faces, ]
     return(dta)
 }

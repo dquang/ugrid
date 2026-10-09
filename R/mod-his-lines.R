@@ -1,4 +1,3 @@
-#' Shiny module for
 his2dLineUi <- function(id) {
 
     ns <- shiny::NS(id)
