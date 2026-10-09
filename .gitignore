@@ -5,8 +5,5 @@ man
 .Rhistory
 .Rbuildignore
 NAMESPACE
-**/img
 rosm.cache
-inst/testdata
 *.Rproj
-inst/doc
