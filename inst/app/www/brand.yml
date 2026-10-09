@@ -1,17 +1,5 @@
 meta:
   name: brand.yml
-  links:
-    home: https://www.bafg.de
-    github: https://github.com/bafg-bund
-
-logo:
-  images:
-    icon-color: img/bfg-logo.png
-    wide-color: img/bfg-logo.png
-    tall-color: img/bfg-logo.png
-  small: icon-color
-  medium: wide-color
-  large: tall-color
 
 color:
 

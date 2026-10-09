@@ -338,7 +338,7 @@ map2dLineServer <- function(id, cman) {
             aM <- addUgrid(path=cman$tbl[hash == sampleHash, path], cman=cman)
             ncVars <- aM$m2D$face
             ncVars <- ncVars[!ncVars %in% unlist(aM$m2D$topo)]
-            ncVars <- data.table(name=unlist(ncVars), choice=names(ncVars))
+            ncVars <- data.table::data.table(name=unlist(ncVars), choice=names(ncVars))
             ncVars <- merge(ncVars, aM$vars[, c("name", "long_name")], by="name")
             varChoices <- ncVars$choice
             names(varChoices) <- ncVars$long_name

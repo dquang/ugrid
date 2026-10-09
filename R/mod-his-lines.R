@@ -249,7 +249,7 @@ his2dLineServer <- function(id, cman) {
             vTbl[!is.na(unit), label := paste0(long_name, " [", unit, "]")]
             vTbl[is.na(unit), label := long_name]
             vTbl <- vTbl[!grepl("coordinate", name)]
-            setorder(vTbl, location, unit, long_name)
+            data.table::setorder(vTbl, location, unit, long_name)
             iTbl <- lapply(tsInfo, function(x) x$idTbl) |> data.table::rbindlist()
             iTbl[, id := trimws(id)]
             iTbl <- unique(iTbl)

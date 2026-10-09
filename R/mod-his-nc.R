@@ -175,7 +175,7 @@ HisNc <- R6::R6Class(
             ret <- data.table::data.table(ret)
             colnames(ret) <- newNames
             ret$ts <- self$ts
-            setcolorder(ret, c("ts", idNames))
+            data.table::setcolorder(ret, c("ts", idNames))
             if (is.function(aggFun)) {
                 ret <- ret[, lapply(.SD, FUN=aggFun), .SDcols = -c("ts")]
             }

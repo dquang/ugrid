@@ -49,7 +49,7 @@ getC4aTable <- function(
 genPaletteContent <- function(palTbl, continuous=FALSE, width="2em",
                               minWidth="20em", maxWidth="40em", reverse=FALSE) {
 
-    if (!is.data.table(palTbl))
+    if (!data.table::is.data.table(palTbl))
         return(NULL)
     pal <- data.table::copy(palTbl)
     if (isTRUE(reverse)) {
@@ -101,7 +101,7 @@ colorPaletteInput <- function(
         filters=filters,
         series=series, range=range
     )
-    if (!is.data.table(palTbl)) {
+    if (!data.table::is.data.table(palTbl)) {
         choices=""
         choicesOpt=NULL
     } else {

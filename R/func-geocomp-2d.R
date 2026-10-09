@@ -399,7 +399,7 @@ genVectorLayer <- function(
         arrPts2 <- rbind(arrPts2[, c("X", "Y", "lid")], vecEndPts[, c("X", "Y", "lid")])
         vec <- rbind(arrPts2, vec)
     }
-    setorder(vec, lid)
+    data.table::setorder(vec, lid)
     vec <- vec[!is.na(X)]
     ret <- NULL
     if (nrow(vec) > 0) {
@@ -494,7 +494,7 @@ genVector4One <- function(faceX, faceY, ucmag, ucx, ucy, baseLength, aRatio=0.2,
         arrPts2 <- rbind(arrPts2[, c("X", "Y", "lid")], vecEndPts[, c("X", "Y", "lid")])
         vec <- rbind(arrPts2, vec)
     }
-    setorder(vec, lid)
+    data.table::setorder(vec, lid)
     vec <- vec[!is.na(X)]
     ret <- NULL
     if (nrow(vec) > 0) {

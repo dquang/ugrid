@@ -22,7 +22,7 @@ appUi <- function(request) {
     shiny::addResourcePath("img", system.file("app/www/img", package="ugrid"))
 
      bslib::page_navbar(
-         title = div(img(src="img/bfg-logo.png", height = "50px"),
+         title = div(img(src="img/logo.png", height = "50px"),
                      style = "padding-left:150px; padding-right:20px;"),
          id = "navbar",
          window_title = "Ergebnisse des Sobek-Modells",
@@ -414,7 +414,7 @@ appServer <- function(input, output, session) {
 #'
 #' @param options list of options for `shiny::shinyApp`
 #' @export
-ugridApp <- function(options=list()) {
+ugridApp <- function(options=list(launch.browser=TRUE)) {
     tmap::tmap_mode("view")
     shiny::shinyApp(ui=appUi, server=appServer, options=options)
 }

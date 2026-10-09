@@ -224,7 +224,7 @@ bbLst2Pol <- function(bbLst, crs=sf::st_crs()) {
 
     bbId <- paste0("bb_", seq_along(bbLst))
     pol <- mapply(bb2Pol, bbLst, SIMPLIFY = FALSE) |>
-        rbindlist() |>
+        data.table::rbindlist() |>
         sf::st_as_sf(sf_column_name="geometry")
     sf::st_crs(pol) <- crs
     return(pol)

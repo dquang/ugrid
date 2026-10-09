@@ -339,7 +339,7 @@ map2dLayerServer <- function(id, cman) {
             }
             ncVars <- ncVars[!ncVars %in% unlist(aM$m2D$topo)]
             ncVars <- ncVars[ncVars %in% aM$vars[hasTime==TRUE, name]]
-            ncVars <- data.table(name=unlist(ncVars), choice=names(ncVars))
+            ncVars <- data.table::data.table(name=unlist(ncVars), choice=names(ncVars))
             ncVars <- merge(ncVars, aM$vars[, c("name", "long_name")], by="name")
             varChoices <- ncVars$choice
             names(varChoices) <- ncVars$long_name
