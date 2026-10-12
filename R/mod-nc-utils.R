@@ -304,7 +304,7 @@ addCases <- function(caseLst, cman, pattern=getOption("ugrid.pattern"),
     chk0 <- rlang::is_named(caseLst) & (length(caseLst) > 0)
     if (!(chk0)) {
         shiny::showNotification(
-            paste("caseLst must be a named and has more than one member. Names must be unique and not already in:",
+            paste("caseLst must be a named and has at least one member. Names must be unique and not already in:",
                   paste(cman$cases, collapse=", ")))
         return(msg)
     }

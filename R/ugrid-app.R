@@ -342,18 +342,23 @@ appServer <- function(input, output, session) {
         }
     })
     shiny::observeEvent(input$addCase, {
-        newCase <- strsplit(input$casePath, split="=", fixed=TRUE)[[1]]
-        if (length(newCase) != 2) {
-            shiny::showNotification("Check input. Path must be in format: Case name = /path/to/folder")
+        newCase <- trimws(input$casePath) |>
+            stringi::stri_replace_all_fixed(";", "\n")
+        tbl <- data.table::fread(text=newCase, sep="=", header=FALSE, fill=TRUE)
+        if (ncol(tbl) != 2) {
+            shiny::showNotification("Check input. Path must be in format:
+                                    Case 1 = /path/to/output1; Case 2= /path/to/output2")
         } else {
-            newCase <- trimws(newCase)
-            caseLst <- gsub("Z:", "~/freigaben", newCase[2], ignore.case = TRUE) |> path.expand() |>
-                stringi::stri_replace_all_fixed("\\", "/")
-            names(caseLst) <- newCase[1]
-            thisCrs <- ifelse (chkChr(input$crs), input$crs, NA_character_)
-            addCases(caseLst=caseLst, cman=cman, crs=thisCrs, ignoreCrsInFile=!input$keepCrs,
-                     initUgrid = input$initUgrid)
-            addHis(caseLst=caseLst, cman=cman)
+            tbl[, V1 := trimws(V1)][, V2 := trimws(V2)]
+            tbl <- tbl[! V1 %in% cman$cases]
+            if (nrow(tbl) > 0) {
+                caseLst <- tbl$V2
+                names(caseLst) <- tbl$V1
+                thisCrs <- ifelse (chkChr(input$crs), input$crs, NA_character_)
+                addCases(caseLst=caseLst, cman=cman, crs=thisCrs, ignoreCrsInFile=!input$keepCrs,
+                         initUgrid = input$initUgrid)
+                addHis(caseLst=caseLst, cman=cman)
+            }
         }
     })
     shiny::observeEvent(input$addSelectedCase, {
