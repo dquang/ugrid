@@ -17,4 +17,5 @@ NULL
 #' @keywords crsidChoices
 #' @docType data
 #' @format a list that created by function `shinyWidgets::prepare_choices`.
+#' @keywords internal
 "crsidChoices"
